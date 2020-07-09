@@ -6,10 +6,10 @@
 Here are the following supported language binding outputs:
 
 - [x] C Bindings
-- [] Python Bindings
-- [] Rust Bindings
-- [] Go Bindings
-- [] Nim Bindings
+- [ ] Python Bindings
+- [ ] Rust Bindings
+- [ ] Go Bindings
+- [ ] Nim Bindings
 
 Here are the following supported Zig language features:
 
