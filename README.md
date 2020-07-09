@@ -73,6 +73,7 @@ void use_internal_and_external(void* arg0, External_t* arg1);
 
 ## Usage Notes
 
-- All you need from this repo is `header_gen.zig` and the `generators` folder;
+- Copy from this repo `header_gen.zig` and the folder `generators`;
  drop them next to your `build.zig`
+- See the `build.zig` in this repo for an example of integration
 

@@ -35,7 +35,6 @@ pub fn HeaderGen(comptime fname: []const u8) type {
     comptime var all_decls: []const Declaration = undefined;
     comptime {
         const import = @typeInfo(@import(fname));
-        const list: *const [50:0]u8 = undefined;
         all_decls = import.Struct.decls;
     }
     return struct {
