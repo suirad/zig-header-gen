@@ -1,0 +1,3 @@
+*.swp
+zig-cache/
+headers/
