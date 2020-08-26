@@ -13,20 +13,10 @@ pub const C_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        var strbuf = [_]u8{0} ** 256;
-
-        var fba = std.heap.FixedBufferAllocator.init(strbuf[0..]);
-
-        var allocator = &fba.allocator;
-
         comptime const filebaseext = std.fs.path.basename(src_file);
         comptime const filebase = filebaseext[0 .. filebaseext.len - 4];
 
-        var filename = fba.allocator.alloc(u8, filebase.len + 2) catch unreachable;
-        std.mem.copy(u8, filename, filebase);
-        std.mem.copy(u8, filename[filebase.len..], ".h");
-
-        var file = dst_dir.createFile(filename, .{}) catch
+        var file = dst_dir.createFile(filebase ++ ".h", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);
 
         var res = Self{ .file = file };
