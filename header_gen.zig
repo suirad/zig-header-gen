@@ -6,6 +6,7 @@ const warn = std.debug.warn;
 
 // Provided generators
 pub const C_Generator = @import("generators/c.zig").C_Generator;
+pub const Python_Generator = @import("generators/python.zig").Python_Generator;
 
 const GeneratorInterface = struct {
     fn init() void {}

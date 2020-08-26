@@ -25,4 +25,5 @@ pub fn build(b: *Builder) void {
     // --- Using header_gen
     const gen = header_gen.HeaderGen("src/exports.zig").init();
     gen.exec(header_gen.C_Generator);
+    gen.exec(header_gen.Python_Generator);
 }
