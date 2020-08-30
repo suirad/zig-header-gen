@@ -67,7 +67,7 @@ pub fn DepsGraph(comptime T: type) type {
 
             // TODO Should a symbol be able to depend on itself?
             // If so, what to do in that case? For now, it blocks itself
-            // if (symbol == self.current_symbol) return true;
+            // if (symbol == self.current_symbol) return false;
 
             return symbol.hasDependenciesOfType(.Linear);
         }
@@ -99,6 +99,9 @@ pub fn DepsGraph(comptime T: type) type {
             if (!self.isBlocking(dependency_name)) return;
 
             var current_symbol = self.current_symbol orelse return error.NoSymbol;
+
+            // If a symbol depends on itself, whatever, not our business
+            if (std.mem.eql(u8, dependency_name, current_symbol.name)) return;
 
             var already_added: bool = false;
             var is_circular: bool = false;
