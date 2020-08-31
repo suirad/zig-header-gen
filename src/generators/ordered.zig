@@ -14,12 +14,14 @@ const SymbolDeclaration = union(enum) {
     Struct: rt.TypeInfo.Struct,
     Union: rt.TypeInfo.Union,
     Enum: rt.TypeInfo.Enum,
+    Fn: rt.TypeInfo.Fn,
 
     pub fn deinit(self: SymbolDeclaration, allocator: *Allocator) void {
         switch (self) {
             .Struct => |s| s.deinit(allocator),
             .Union => |u| u.deinit(allocator),
             .Enum => |e| e.deinit(allocator),
+            .Fn => |f| f.deinit(allocator),
         }
     }
 };
@@ -29,6 +31,8 @@ fn isSymbolDependency(comptime symbol_type: type) bool {
 
     return switch (info) {
         .Struct, .Union, .Enum => true,
+        .Pointer => |p| isSymbolDependency(p.child),
+        .Array => |a| isSymbolDependency(a.child),
         else => false,
     };
 }
@@ -70,22 +74,16 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         pub fn deinit(self: *Self) void {
             self.flush();
 
+            self.symbols.deinit();
+            
             self.inner_gen.deinit();
-
-            // TODO Enable deinit hashmap. Right now it segfaults, reason unknown
-            // var iter = self.symbols.symbols.iterator();
-            // while (iter.next()) |kv| {
-            //     kv.value.payload.deinit(self.allocator);
-            // }
-
-            // self.symbols.deinit();
 
             self.emitted_phase.deinit();
         }
 
         fn getNextPhaseFor(self: *Self, symbol_name: []const u8, partial: bool) !?SymbolPhase {
             var result = try self.emitted_phase.getOrPut(symbol_name);
-            
+
             if (!result.found_existing) {
                 result.kv.value = if (partial) .Signature else .Full;
 
@@ -105,31 +103,44 @@ pub fn Ordered_Generator(comptime Generator: type) type {
 
         fn flush(self: *Self) void {
             while (self.symbols.readEmitted()) |emitted| {
-                var phase = self.getNextPhaseFor(emitted.symbol.name, emitted.partial) catch unreachable orelse continue ;
-                
-                // Handle emitted.partial
+                const partial = if (emitted.symbol.payload == .Fn) false else emitted.partial;
+
+                var phase = self.getNextPhaseFor(emitted.symbol.name, emitted.partial) catch unreachable orelse continue;
+
                 switch (emitted.symbol.payload) {
                     .Struct => |meta| self.inner_gen.gen_struct(emitted.symbol.name, meta, phase),
                     .Union => |meta| self.inner_gen.gen_union(emitted.symbol.name, meta, phase),
                     .Enum => |meta| self.inner_gen.gen_enum(emitted.symbol.name, meta, phase),
+                    .Fn => |meta| self.inner_gen.gen_func(emitted.symbol.name, meta),
                 }
             }
         }
 
         pub fn gen_func(self: *Self, comptime name: []const u8, comptime meta: FnMeta) void {
+            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+                .Fn = rt.TypeInfo.Fn.init(meta, rt.dd),
+            };
+
+            self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
+            inline for (meta.args) |f| {
+                if (f.arg_type != null and comptime isSymbolDependency(f.arg_type.?)) {
+                    self.symbols.addDependency(getTypeName(f.arg_type.?)) catch |err| @panic(@errorName(err));
+                }
+            }
+            if (meta.return_type) |t| {
+                if (comptime isSymbolDependency(t)) {
+                    self.symbols.addDependency(getTypeName(t)) catch |err| @panic(@errorName(err));
+                }
+            }
+            self.symbols.endSymbol() catch |err| @panic(@errorName(err));
+
             self.flush();
-
-            // var rt_func = rt.TypeInfo.copy(rt.TypeInfo.Declaration.Data.FnDecl, self.allocator, func);
-            // defer rt_func.deinit(self.allocator);
-
-            var rt_meta = rt.TypeInfo.copy2(rt.TypeInfo.Fn, self.allocator, meta, 2);
-            defer rt_meta.deinit(self.allocator);
-
-            self.inner_gen.gen_func(name, rt_meta);
         }
 
         pub fn gen_struct(self: *Self, comptime name: []const u8, comptime meta: StructMeta) void {
-            var decl: SymbolDeclaration = SymbolDeclaration{ .Struct = rt.TypeInfo.copy(rt.TypeInfo.Struct, self.allocator, meta) };
+            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+                .Struct = rt.TypeInfo.Struct.init(meta, name, rt.dd),
+            };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
             inline for (meta.fields) |f| {
@@ -143,7 +154,9 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_enum(self: *Self, comptime name: []const u8, comptime meta: EnumMeta) void {
-            var decl: SymbolDeclaration = SymbolDeclaration{ .Enum = rt.TypeInfo.copy(rt.TypeInfo.Enum, self.allocator, meta) };
+            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+                .Enum = rt.TypeInfo.Enum.init(meta, name, rt.dd),
+            };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
             // Enums have no type dependencies I think, yay
@@ -153,7 +166,9 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_union(self: *Self, comptime name: []const u8, comptime meta: UnionMeta) void {
-            var decl: SymbolDeclaration = SymbolDeclaration{ .Union = rt.TypeInfo.copy(rt.TypeInfo.Union, self.allocator, meta) };
+            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+                .Union = rt.TypeInfo.Union.init(meta, name, rt.dd),
+            };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
             inline for (meta.fields) |f| {

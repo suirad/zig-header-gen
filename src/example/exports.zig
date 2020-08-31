@@ -1,4 +1,3 @@
-const rt = @import("../runtime.zig");
 const header_gen = @import("header_gen");
 
 export fn thing(one: usize, two: *LameType, three: [*]u16) bool {
@@ -15,6 +14,7 @@ const WackType = packed struct {
 
 const LameType = extern struct {
     blah: WackType,
+    bleh: *WhatsAUnion,
 };
 const WhatsAUnion = extern union {
     a: *LameType,

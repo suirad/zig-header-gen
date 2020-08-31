@@ -1,6 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
+pub const dd: i32 = 2;
+
 pub const TypeId = @TagType(TypeInfo);
 
 pub const TypeInfo = union(enum) {
@@ -35,12 +37,25 @@ pub const TypeInfo = union(enum) {
     pub const Int = struct {
         is_signed: bool,
         bits: i32,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Int, comptime depth: i32) Int {
+            return comptime .{
+                .is_signed = m.is_signed,
+                .bits = m.bits,
+            };
+        }
     };
 
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Float = struct {
         bits: i32,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Float, comptime depth: i32) Float {
+            return comptime .{
+                .bits = m.bits,
+            };
+        }
     };
 
     /// This data structure is used by the Zig language code generation and
@@ -50,7 +65,7 @@ pub const TypeInfo = union(enum) {
         is_const: bool,
         is_volatile: bool,
         alignment: i32,
-        child: *TypeInfo,
+        child: *const TypeInfo,
         is_allowzero: bool,
         /// This field is an optional type.
         /// The type of the sentinel is the element type of the pointer, which is
@@ -66,6 +81,17 @@ pub const TypeInfo = union(enum) {
             C,
         };
 
+        pub fn init(comptime m: std.builtin.TypeInfo.Pointer, comptime depth: i32) Pointer {
+            return comptime .{
+                .size = @intToEnum(TypeInfo.Pointer.Size, @enumToInt(m.size)),
+                .is_const = m.is_const,
+                .is_volatile = m.is_volatile,
+                .alignment = m.alignment,
+                .child = &TypeInfo.init(m.child, depth),
+                .is_allowzero = m.is_allowzero,
+            };
+        }
+
         pub fn deinit(self: *const Pointer, allocator: *Allocator) void {
             self.child.deinit(allocator);
 
@@ -77,12 +103,19 @@ pub const TypeInfo = union(enum) {
     /// therefore must be kept in sync with the compiler implementation.
     pub const Array = struct {
         len: i32,
-        child: *TypeInfo,
+        child: *const TypeInfo,
         /// This field is an optional type.
         /// The type of the sentinel is the element type of the array, which is
         /// the value of the `child` field in this struct. However there is no way
         /// to refer to that type here, so we use `var`.
         // sentinel: var,
+        pub fn init(comptime m: std.builtin.TypeInfo.Array, comptime depth: i32) Array {
+            return comptime .{
+                .len = m.len,
+                .child = &TypeInfo.init(m.child, depth),
+            };
+        }
+
         pub fn deinit(self: *const Array, allocator: *Allocator) void {
             self.child.deinit(allocator);
 
@@ -102,8 +135,15 @@ pub const TypeInfo = union(enum) {
     /// therefore must be kept in sync with the compiler implementation.
     pub const StructField = struct {
         name: []const u8,
-        field_type: *TypeInfo,
+        field_type: *const TypeInfo,
         // default_value: var,
+
+        pub fn init(comptime f: std.builtin.TypeInfo.StructField, comptime depth: i32) StructField {
+            return comptime .{
+                .name = f.name,
+                .field_type = &TypeInfo.init(f.field_type, depth),
+            };
+        }
 
         pub fn deinit(self: *const StructField, allocator: *Allocator) void {
             allocator.free(self.name);
@@ -122,6 +162,31 @@ pub const TypeInfo = union(enum) {
         fields: []const StructField,
         decls: []const Declaration,
 
+        pub fn init(comptime m: std.builtin.TypeInfo.Struct, comptime name: []const u8, comptime depth: i32) Struct {
+            return comptime .{
+                .name = name,
+                .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
+                .fields = fields: {
+                    comptime var arr: [m.fields.len]StructField = undefined;
+
+                    inline for (m.fields) |f, i| {
+                        arr[i] = StructField.init(f, depth - 1);
+                    }
+
+                    break :fields &arr;
+                },
+                .decls = decls: {
+                    comptime var arr: [m.decls.len]Declaration = undefined;
+
+                    inline for (m.decls) |f, i| {
+                        arr[i] = Declaration.init(f, depth - 1);
+                    }
+
+                    break :decls &arr;
+                },
+            };
+        }
+
         pub fn deinit(self: *const Struct, allocator: *Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
             for (self.decls) |f| f.deinit(allocator);
@@ -134,7 +199,13 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Optional = struct {
-        child: *TypeInfo,
+        child: *const TypeInfo,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Optional, comptime depth: i32) Optional {
+            return comptime .{
+                .child = &TypeInfo.init(m.child, depth),
+            };
+        }
 
         pub fn deinit(self: *const Optional, allocator: *Allocator) void {
             self.child.deinit(allocator);
@@ -146,8 +217,15 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const ErrorUnion = struct {
-        error_set: *TypeInfo,
-        payload: *TypeInfo,
+        error_set: *const TypeInfo,
+        payload: *const TypeInfo,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.ErrorUnion, comptime depth: i32) ErrorUnion {
+            return comptime .{
+                .error_set = &TypeInfo.init(m.error_set, depth),
+                .payload = &TypeInfo.init(m.payload, depth),
+            };
+        }
 
         pub fn deinit(self: *const ErrorUnion, allocator: *Allocator) void {
             self.error_set.deinit(allocator);
@@ -178,6 +256,13 @@ pub const TypeInfo = union(enum) {
         name: []const u8,
         value: i32,
 
+        pub fn init(comptime f: std.builtin.TypeInfo.EnumField, comptime depth: i32) EnumField {
+            return comptime .{
+                .name = f.name,
+                .value = f.value,
+            };
+        }
+
         pub fn deinit(self: *const EnumField, allocator: *Allocator) void {
             allocator.free(self.name);
         }
@@ -188,10 +273,37 @@ pub const TypeInfo = union(enum) {
     pub const Enum = struct {
         name: ?[]const u8,
         layout: ContainerLayout,
-        tag_type: *TypeInfo,
+        tag_type: *const TypeInfo,
         fields: []const EnumField,
         decls: []const Declaration,
         is_exhaustive: bool,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Enum, comptime name: []const u8, comptime depth: i32) Enum {
+            return comptime .{
+                .name = name,
+                .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
+                .tag_type = &TypeInfo.init(m.tag_type, depth),
+                .fields = fields: {
+                    comptime var arr: [m.fields.len]EnumField = undefined;
+
+                    inline for (m.fields) |f, i| {
+                        arr[i] = EnumField.init(f, depth - 1);
+                    }
+
+                    break :fields &arr;
+                },
+                .decls = decls: {
+                    comptime var arr: [m.decls.len]Declaration = undefined;
+
+                    inline for (m.decls) |f, i| {
+                        arr[i] = Declaration.init(f, depth - 1);
+                    }
+
+                    break :decls &arr;
+                },
+                .is_exhaustive = m.is_exhaustive,
+            };
+        }
 
         pub fn deinit(self: *const Enum, allocator: *Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
@@ -210,7 +322,21 @@ pub const TypeInfo = union(enum) {
     pub const UnionField = struct {
         name: []const u8,
         enum_field: ?EnumField,
-        field_type: *TypeInfo,
+        field_type: *const TypeInfo,
+
+        pub fn init(comptime f: std.builtin.TypeInfo.UnionField, comptime depth: i32) UnionField {
+            return comptime .{
+                .name = f.name,
+                .enum_field = if (f.enum_field) |ef|
+                    .{
+                        .name = ef.name,
+                        .value = ef.value,
+                    }
+                else
+                    null,
+                .field_type = &TypeInfo.init(f.field_type, depth),
+            };
+        }
 
         pub fn deinit(self: *const UnionField, allocator: *Allocator) void {
             allocator.free(self.name);
@@ -230,9 +356,35 @@ pub const TypeInfo = union(enum) {
     pub const Union = struct {
         name: ?[]const u8,
         layout: ContainerLayout,
-        tag_type: ?*TypeInfo,
+        tag_type: ?*const TypeInfo,
         fields: []const UnionField,
         decls: []const Declaration,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Union, comptime name: []const u8, comptime depth: i32) Union {
+            return comptime .{
+                .name = name,
+                .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
+                .tag_type = if (m.tag_type) |t| &TypeInfo.init(t, depth) else null,
+                .fields = fields: {
+                    comptime var arr: [m.fields.len]UnionField = undefined;
+
+                    inline for (m.fields) |f, i| {
+                        arr[i] = UnionField.init(f, depth - 1);
+                    }
+
+                    break :fields &arr;
+                },
+                .decls = decls: {
+                    comptime var arr: [m.decls.len]Declaration = undefined;
+
+                    inline for (m.decls) |f, i| {
+                        arr[i] = Declaration.init(f, depth - 1);
+                    }
+
+                    break :decls &arr;
+                },
+            };
+        }
 
         pub fn deinit(self: *const Union, allocator: *Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
@@ -254,7 +406,15 @@ pub const TypeInfo = union(enum) {
     pub const FnArg = struct {
         is_generic: bool,
         is_noalias: bool,
-        arg_type: ?*TypeInfo,
+        arg_type: ?*const TypeInfo,
+
+        pub fn init(comptime f: std.builtin.TypeInfo.FnArg, comptime depth: i32) FnArg {
+            return comptime .{
+                .is_generic = f.is_generic,
+                .is_noalias = f.is_noalias,
+                .arg_type = if (f.arg_type) |t| &TypeInfo.init(t, depth) else null,
+            };
+        }
 
         pub fn deinit(self: *const FnArg, allocator: *Allocator) void {
             if (self.arg_type) |t| {
@@ -271,8 +431,26 @@ pub const TypeInfo = union(enum) {
         calling_convention: CallingConvention,
         is_generic: bool,
         is_var_args: bool,
-        return_type: ?*TypeInfo,
+        return_type: ?*const TypeInfo,
         args: []const FnArg,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Fn, comptime depth: i32) Fn {
+            return comptime .{
+                .calling_convention = @intToEnum(CallingConvention, @enumToInt(m.calling_convention)),
+                .is_generic = m.is_generic,
+                .is_var_args = m.is_var_args,
+                .return_type = if (m.return_type) |t| &TypeInfo.init(t, depth) else null,
+                .args = args: {
+                    comptime var arr: [m.args.len]FnArg = undefined;
+
+                    inline for (m.args) |f, i| {
+                        arr[i] = FnArg.init(f, depth);
+                    }
+
+                    break :args &arr;
+                },
+            };
+        }
 
         pub fn deinit(self: *const Fn, allocator: *Allocator) void {
             if (self.return_type) |r| {
@@ -296,7 +474,13 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const AnyFrame = struct {
-        child: ?*TypeInfo,
+        child: ?*const TypeInfo,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.AnyFrame, comptime depth: i32) AnyFrame {
+            return comptime .{
+                .child = if (m.child) |t| &TypeInfo.init(t, depth) else null,
+            };
+        }
 
         pub fn deinit(self: *const AnyFrame, allocator: *Allocator) void {
             if (self.child) |child| {
@@ -311,7 +495,14 @@ pub const TypeInfo = union(enum) {
     /// therefore must be kept in sync with the compiler implementation.
     pub const Vector = struct {
         len: i32,
-        child: *TypeInfo,
+        child: *const TypeInfo,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Vector, comptime depth: i32) Vector {
+            return comptime .{
+                .len = m.len,
+                .child = &TypeInfo.init(m.child, depth),
+            };
+        }
 
         pub fn deinit(self: *const Vector, allocator: *Allocator) void {
             self.child.deinit(allocator);
@@ -327,6 +518,14 @@ pub const TypeInfo = union(enum) {
         is_pub: bool,
         data: Data,
 
+        pub fn init(comptime f: std.builtin.TypeInfo.Declaration, comptime depth: i32) Declaration {
+            return comptime .{
+                .name = f.name,
+                .is_pub = f.is_pub,
+                .data = Data.init(f.data, depth),
+            };
+        }
+
         pub fn deinit(self: *const Declaration, allocator: *Allocator) void {
             self.data.deinit(allocator);
 
@@ -336,20 +535,30 @@ pub const TypeInfo = union(enum) {
         /// This data structure is used by the Zig language code generation and
         /// therefore must be kept in sync with the compiler implementation.
         pub const Data = union(enum) {
-            Type: *TypeInfo,
-            Var: *TypeInfo,
+            Type: *const TypeInfo,
+            Var: *const TypeInfo,
             Fn: FnDecl,
+
+            pub fn init(comptime d: std.builtin.TypeInfo.Declaration.Data, comptime depth: i32) Data {
+                return comptime switch (d) {
+                    .Type => |t| .{ .Type = &TypeInfo.init(t, depth) },
+                    .Var => |t| .{
+                        .Var = &TypeInfo.init(t, depth),
+                    },
+                    .Fn => |t| .{ .Fn = FnDecl.init(t, depth) },
+                };
+            }
 
             /// This data structure is used by the Zig language code generation and
             /// therefore must be kept in sync with the compiler implementation.
             pub const FnDecl = struct {
-                fn_type: *TypeInfo,
+                fn_type: *const TypeInfo,
                 inline_type: Inline,
                 is_var_args: bool,
                 is_extern: bool,
                 is_export: bool,
                 lib_name: ?[]const u8,
-                return_type: *TypeInfo,
+                return_type: *const TypeInfo,
                 arg_names: []const []const u8,
 
                 /// This data structure is used by the Zig language code generation and
@@ -359,6 +568,19 @@ pub const TypeInfo = union(enum) {
                     Always,
                     Never,
                 };
+
+                pub fn init(comptime t: std.builtin.TypeInfo.Declaration.Data.FnDecl, comptime depth: i32) FnDecl {
+                    return comptime .{
+                        .fn_type = &TypeInfo.init(t.fn_type, depth),
+                        .inline_type = @intToEnum(TypeInfo.Declaration.Data.FnDecl.Inline, @enumToInt(t.inline_type)),
+                        .is_var_args = t.is_var_args,
+                        .is_extern = t.is_extern,
+                        .is_export = t.is_export,
+                        .lib_name = t.lib_name,
+                        .return_type = &TypeInfo.init(t.return_type, depth),
+                        .arg_names = t.arg_names,
+                    };
+                }
 
                 pub fn deinit(self: *const FnDecl, allocator: *Allocator) void {
                     self.fn_type.deinit(allocator);
@@ -389,12 +611,52 @@ pub const TypeInfo = union(enum) {
         };
     };
 
-    pub fn init(allocator: *Allocator, comptime builtin: std.builtin.TypeInfo) TypeInfo {
-        return TypeInfo.copy(TypeInfo, allocator, builtin);
-    }
+    pub fn init(comptime builtin: type, comptime depth: i32) TypeInfo {
+        if (depth <= 0) return .{ .Opaque = {} };
 
-    pub fn init2(allocator: *Allocator, comptime builtin: std.builtin.TypeInfo, comptime depth: u32) TypeInfo {
-        return TypeInfo.copy2(TypeInfo, allocator, builtin, depth);
+        comptime const info = @typeInfo(builtin);
+
+        return comptime switch (info) {
+            .Type => .{ .Type = {} },
+            .Void => .{ .Void = {} },
+            .Bool => .{ .Bool = {} },
+            .NoReturn => .{ .NoReturn = {} },
+            .Int => |m| .{ .Int = Int.init(m, depth) },
+            .Float => |m| .{ .Float = Float.init(m, depth) },
+            .Pointer => |m| .{ .Pointer = Pointer.init(m, depth) },
+            .Array => |m| .{ .Array = Array.init(m, depth) },
+            .Struct => |m| .{ .Struct = Struct.init(m, @typeName(builtin), depth) },
+            .ComptimeFloat => .{ .ComptimeFloat = {} },
+            .ComptimeInt => .{ .ComptimeInt = {} },
+            .Undefined => .{ .Undefined = {} },
+            .Null => .{ .Null = {} },
+            .Optional => |m| .{ .Optional = Optional.init(m, depth) },
+            .ErrorUnion => |m| .{ .ErrorUnion = ErrorUnion.init(m, depth) }, // TODO
+            .ErrorSet => |m| .{
+                .ErrorSet = errorset: {
+                    if (m == null) return null;
+
+                    comptime var arr: [m.?.len]Error = undefined;
+
+                    inline for (m.?) |f, i| {
+                        arr[i] = .{
+                            .name = f.name,
+                        };
+                    }
+
+                    break :errorset &arr;
+                },
+            },
+            .Enum => |m| .{ .Enum = Enum.init(m, @typeName(builtin), depth) },
+            .Union => |m| .{ .Union = Union.init(m, @typeName(builtin), depth) },
+            .Fn => |m| .{ .Fn = Fn.init(m, depth) },
+            .BoundFn => |m| .{ .BoundedFn = Fn.init(m, depth) },
+            .Opaque => .{ .Opaque = {} },
+            .Frame => .{ .Frame = {} }, // TODO
+            .AnyFrame => |m| .{ .AnyFrame = AnyFrame.init(m, depth) },
+            .Vector => |m| .{ .Vector = Vector.init(m, depth) },
+            .EnumLiteral => .{ .EnumLiteral = {} },
+        };
     }
 
     pub fn deinit(self: *TypeInfo, allocator: *Allocator) void {
@@ -417,73 +679,6 @@ pub const TypeInfo = union(enum) {
             .AnyFrame => |a| a.deinit(allocator),
             .Vector => |v| v.deinit(allocator),
             else => {},
-        }
-    }
-
-    pub fn copy(comptime T: type, allocator: *Allocator, comptime src: anytype) T {
-        return TypeInfo.copy2(T, allocator, src, 5);
-    }
-
-    pub fn copy2(comptime T: type, allocator: *Allocator, comptime src: anytype, comptime depth: u32) T {
-        comptime const info = @typeInfo(T);
-
-        if (info == .Void) {
-            return;
-        } else if (info == .Pointer and info.Pointer.size == .One and info.Pointer.child == TypeInfo) {
-            var ptr = allocator.create(TypeInfo) catch unreachable;
-
-            if (depth > 0) {
-                ptr.* = TypeInfo.init2(allocator, @typeInfo(src), depth - 1);
-
-                if (ptr.* == .Struct) ptr.*.Struct.name = @typeName(src)
-                else if (ptr.* == .Union) ptr.*.Union.name = @typeName(src)
-                else if (ptr.* == .Enum) ptr.*.Enum.name = @typeName(src);
-            } else {
-                // TODO Create special variant for max-depth
-                ptr.* = TypeInfo{ .Void = {} };
-            }
-
-            return ptr;
-        } else if (info == .Enum) {
-            return @intToEnum(T, @enumToInt(src));
-        } else if (info == .Pointer and info.Pointer.size == .Slice) {
-            var dst_slice = allocator.alloc(info.Pointer.child, src.len) catch unreachable;
-
-            inline for (src) |src_val, i| {
-                dst_slice[i] = TypeInfo.copy2(info.Pointer.child, allocator, src_val, depth);
-            }
-
-            return dst_slice;
-        } else if (info == .Struct) {
-            var obj: T = undefined;
-
-            inline for (info.Struct.fields) |struct_field| {
-                if (comptime @hasField(@TypeOf(src), struct_field.name)) {
-                    @field(obj, struct_field.name) = TypeInfo.copy2(struct_field.field_type, allocator, @field(src, struct_field.name), depth);
-                }
-            }
-
-            return obj;
-        } else if (info == .Union) {
-            inline for (info.Union.fields) |union_field| {
-                comptime var tag_type = @field(@TagType(@TypeOf(src)), union_field.enum_field.?.name);
-
-                if (src == tag_type) {
-                    var obj = TypeInfo.copy2(union_field.field_type, allocator, @field(src, union_field.name), depth);
-
-                    return @unionInit(T, union_field.name, obj);
-                }
-            }
-
-            @panic("Type not runtimable");
-        } else if (info == .Optional) {
-            if (src) |src_val| {
-                return TypeInfo.copy2(info.Optional.child, allocator, src_val, depth);
-            } else {
-                return null;
-            }
-        } else {
-            return @as(T, src);
         }
     }
 };
@@ -514,35 +709,32 @@ const talloc = std.testing.allocator;
 // TODO .Type
 
 test "Runtime TypeInfo.Void" {
-    var info_void = TypeInfo.init(talloc, @typeInfo(void));
+    var info_void = TypeInfo.init(void, dd);
     expect(info_void == .Void);
-    info_void.deinit(talloc);
 }
+
 test "Runtime TypeInfo.Bool" {
-    var info_bool = TypeInfo.init(talloc, @typeInfo(bool));
+    var info_bool = TypeInfo.init(bool, dd);
     expect(info_bool == .Bool);
-    info_bool.deinit(talloc);
 }
 
 // TODO .NoReturn
 
 test "Runtime TypeInfo.Int" {
-    var info_i32 = TypeInfo.init(talloc, @typeInfo(i32));
+    var info_i32 = TypeInfo.init(i32, dd);
     expect(info_i32 == .Int);
     expectEqual(@as(i32, 32), info_i32.Int.bits);
     expectEqual(true, info_i32.Int.is_signed);
-    info_i32.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Float" {
-    var info_f64 = TypeInfo.init(talloc, @typeInfo(f64));
+    var info_f64 = TypeInfo.init(f64, dd);
     expect(info_f64 == .Float);
     expectEqual(@as(i32, 64), info_f64.Float.bits);
-    info_f64.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Pointer" {
-    var info_pointer_f64 = TypeInfo.init(talloc, @typeInfo(*f64));
+    var info_pointer_f64 = TypeInfo.init(*f64, dd);
     expect(info_pointer_f64 == .Pointer);
     expectEqual(TypeInfo.Pointer.Size.One, info_pointer_f64.Pointer.size);
     expectEqual(false, info_pointer_f64.Pointer.is_const);
@@ -550,9 +742,8 @@ test "Runtime TypeInfo.Pointer" {
     expectEqual(@as(i32, 8), info_pointer_f64.Pointer.alignment);
     expect(info_pointer_f64.Pointer.child.* == .Float);
     expectEqual(false, info_pointer_f64.Pointer.is_allowzero);
-    info_pointer_f64.deinit(talloc);
 
-    var info_pointer_many = TypeInfo.init(talloc, @typeInfo([*]f64));
+    var info_pointer_many = TypeInfo.init([*]f64, dd);
     expect(info_pointer_many == .Pointer);
     expectEqual(TypeInfo.Pointer.Size.Many, info_pointer_many.Pointer.size);
     expectEqual(false, info_pointer_many.Pointer.is_const);
@@ -560,15 +751,13 @@ test "Runtime TypeInfo.Pointer" {
     expectEqual(@as(i32, 8), info_pointer_many.Pointer.alignment);
     expect(info_pointer_many.Pointer.child.* == .Float);
     expectEqual(false, info_pointer_many.Pointer.is_allowzero);
-    info_pointer_many.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Array" {
-    var info_array = TypeInfo.init(talloc, @typeInfo([2]i32));
+    var info_array = TypeInfo.init([2]i32, dd);
     expect(info_array == .Array);
     expectEqual(@as(i32, 2), info_array.Array.len);
     expect(info_array.Array.child.* == .Int);
-    info_array.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Struct" {
@@ -578,48 +767,43 @@ test "Runtime TypeInfo.Struct" {
         pub fn bar() void {}
     };
 
-    var info_struct = TypeInfo.init(talloc, @typeInfo(FooStruct));
+    var info_struct = TypeInfo.init(FooStruct, dd);
     expect(info_struct == .Struct);
     expect(info_struct.Struct.layout == .Auto);
     expectEqual(@as(usize, 1), info_struct.Struct.fields.len);
     expectEqualStrings("int", info_struct.Struct.fields[0].name);
     expect(info_struct.Struct.fields[0].field_type.* == .Int);
-    info_struct.deinit(talloc);
 }
 
 test "Runtime TypeInfo.ComptimeFloat" {
-    var info_comptime_float = TypeInfo.init(talloc, @typeInfo(comptime_float));
+    var info_comptime_float = TypeInfo.init(comptime_float, dd);
     expect(info_comptime_float == .ComptimeFloat);
-    info_comptime_float.deinit(talloc);
 }
 
 test "Runtime TypeInfo.ComptimeInt" {
-    var info_comptime_int = TypeInfo.init(talloc, @typeInfo(comptime_int));
+    var info_comptime_int = TypeInfo.init(comptime_int, dd);
     expect(info_comptime_int == .ComptimeInt);
-    info_comptime_int.deinit(talloc);
 }
 
-// TODO .Undefined
-// TODO .Null
+// // TODO .Undefined
+// // TODO .Null
 
 test "Runtime TypeInfo.Optional" {
-    var info_optional = TypeInfo.init(talloc, @typeInfo(?i32));
+    var info_optional = TypeInfo.init(?i32, dd);
     expect(info_optional == .Optional);
     expect(info_optional.Optional.child.* == .Int);
-    info_optional.deinit(talloc);
 }
 
-// TODO .ErrorUnion
-// TODO .ErrorSet
+// // TODO .ErrorUnion
+// // TODO .ErrorSet
 
 test "Runtime TypeInfo.Enum" {
     const FooEnum = enum {
         Foo, Bar
     };
 
-    var info_enum = TypeInfo.init(talloc, @typeInfo(FooEnum));
+    var info_enum = TypeInfo.init(FooEnum, dd);
     expect(info_enum == .Enum);
-    info_enum.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Union" {
@@ -627,16 +811,32 @@ test "Runtime TypeInfo.Union" {
         Foo: void, Bar: i32
     };
 
-    var info_union = TypeInfo.init(talloc, @typeInfo(FooUnion));
+    var info_union = TypeInfo.init(FooUnion, dd);
     expect(info_union == .Union);
-    info_union.deinit(talloc);
 }
 
 test "Runtime TypeInfo.Fn" {
     // .Fn
-    var info_fn = TypeInfo.init(talloc, @typeInfo(fn () void));
+    var info_fn = TypeInfo.init(fn () void, dd);
     expect(info_fn == .Fn);
-    info_fn.deinit(talloc);
+}
+
+test "Runtime TypeInfo.Struct declarations" {
+    // .Fn
+    var info_fn = TypeInfo.init(struct {
+        const WackType = packed struct {
+            mr_field: *LameType, ola: u8
+        };
+
+        const LameType = struct {
+            blah: **WackType,
+        };
+
+        pub fn thing(one: usize, two: *LameType, three: [*]u16) bool {
+            return one == 1;
+        }
+    }, dd);
+    expect(info_fn == .Struct);
 }
 
 // TODO .BoundFn

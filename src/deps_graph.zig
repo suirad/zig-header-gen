@@ -16,7 +16,8 @@ pub fn DepsGraph(comptime T: type) type {
         dependants_of: StringHashMap(ArrayList(*Symbol)),
         // ?*Symbol owned by self.symbols
         current_symbol: ?*Symbol,
-        // TODO
+        // Queue containing symbols ready to be emitted
+        // Can be updated each time after calling endSymbol()
         emitted: TailQueue(EmittedSymbol),
 
         const Self = @This();
@@ -38,7 +39,7 @@ pub fn DepsGraph(comptime T: type) type {
                 entry.value.deinit(self.allocator);
 
                 // And free the pointer
-                self.allocator.destroy(entry);
+                self.allocator.destroy(entry.value);
             }
 
             self.symbols.deinit();
@@ -142,15 +143,6 @@ pub fn DepsGraph(comptime T: type) type {
                     try current_symbol.addDependency(.{ .Linear = dependency_name });
                 }
             }
-
-            // TODO
-            //  1. Implement Symbol.addDependency()                           ✔
-            //  2. Implement Symbol.hasDependencies()                         ✔
-            //  3. Implement Symbol.hasDependenciesOfType(tag)                ✔
-            //  4. Only add dependencies when they are not emitted yet, or    ✔
-            //     the dependency itself is blocked
-            //  5. Add to the action queue in endSymbol()                     ✔
-            //  6. Implement isBlocking(name)                                 ✔
         }
 
         pub const EndSymbolError = error{OutOfMemory};
@@ -169,6 +161,9 @@ pub fn DepsGraph(comptime T: type) type {
                 unblock_queue.append(node);
             }
 
+            // All items in unblock_queue have already been unblocked, and so
+            // should be emitted. Also, any dependants of them should be checked
+            // if they themselves can be unblocked as well
             while (unblock_queue.popFirst()) |symbol_node| {
                 self.emitted.append(symbol_node);
 
@@ -177,9 +172,11 @@ pub fn DepsGraph(comptime T: type) type {
                 if (self.dependants_of.get(symbol.name)) |kv| {
                     for (kv.value.items) |dependant| {
                         if (dependant.removeDependency(symbol.name)) |dep| {
-                            const unblock_dep = (dep == .Linear and !dependant.hasDependenciesOfType(.Linear)) or (dep == .Circular and !dependant.hasDependencies());
+                            const unblock_dep = (!dependant.emitted and !dependant.hasDependenciesOfType(.Linear)) or !dependant.hasDependencies();
 
                             if (!unblock_dep) continue;
+
+                            dependant.emitted = true;
 
                             const node = try unblock_queue.createNode(.{
                                 .symbol = dependant,
@@ -190,8 +187,6 @@ pub fn DepsGraph(comptime T: type) type {
                         }
                     }
                 }
-
-                // if (!symbol.hasDependenciesOfType(.Linear) or !symbol.hasDependencies()) {}
             }
 
             self.current_symbol = null;
@@ -244,7 +239,7 @@ pub fn DepsGraph(comptime T: type) type {
             name: []const u8,
             // Slices not owned
             dependencies: ArrayList(Dependency),
-
+            emitted: bool = false,
             payload: T,
 
             pub fn init(allocator: *Allocator, name: []const u8, payload: T) Symbol {
@@ -342,6 +337,12 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
+fn expectSymbol(emitted: ?DepsGraph(void).EmittedSymbol, expected_name: []const u8, expected_partial: bool) void {
+    expect(emitted != null);
+    expectEqualStrings(expected_name, emitted.?.symbol.name);
+    expectEqual(expected_partial, emitted.?.partial);
+}
+
 test "Simple dependency graph with circular dependencies" {
     const allocator = std.testing.allocator;
 
@@ -426,5 +427,38 @@ test "Blocked symbols iterator" {
     expectEqualStrings(symbol.?.name, "TextPosition");
     expect(iter.next() == null);
 
+    deps.deinit();
+}
+
+test "Three tier circular dependencies" {
+    const allocator = std.testing.allocator;
+
+    var deps = DepsGraph(void).init(allocator);
+
+    try deps.beginSymbol("LookMaAnEnum", {});
+    try deps.endSymbol();
+
+    try deps.beginSymbol("WackType", {});
+    try deps.addDependency("LameType");
+    try deps.endSymbol();
+
+    try deps.beginSymbol("LameType", {});
+    try deps.addDependency("WackType");
+    try deps.addDependency("WhatsAUnion");
+    try deps.endSymbol();
+
+    try deps.beginSymbol("WhatsAUnion", {});
+    try deps.addDependency("LameType");
+    try deps.endSymbol();
+
+    expectSymbol(deps.readEmitted(), "LookMaAnEnum", false);
+    expectSymbol(deps.readEmitted(), "WhatsAUnion", true);
+    expectSymbol(deps.readEmitted(), "LameType", true);
+    expectSymbol(deps.readEmitted(), "WackType", false);
+    expectSymbol(deps.readEmitted(), "WhatsAUnion", false);
+    expectSymbol(deps.readEmitted(), "LameType", false);
+    
+    expect(deps.readEmitted() == null);
+    
     deps.deinit();
 }

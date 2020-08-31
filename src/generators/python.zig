@@ -67,7 +67,7 @@ pub const Python_Generator = struct {
         self.write("\n\n");
     }
 
-    pub fn _gen_fields(self: *Self, name: []const u8, fields: anytype, phase: SymbolPhase) void {
+    pub fn _gen_fields(self: *Self, name: []const u8, fields: var, phase: SymbolPhase) void {
         comptime const prefix = "\t            ";
 
         if (phase == .Body) {
@@ -83,17 +83,7 @@ pub const Python_Generator = struct {
 
             self.print("(\"{}\", ", .{field.name});
 
-            const info = field.field_type.*;
-
-            if (info == .Array) {
-                self.writeType(info.Array.child.*);
-            } else {
-                self.writeType(info);
-            }
-
-            if (info == .Array) {
-                self.print(" * {}", .{info.Array.len});
-            }
+            self.writeType(field.field_type.*);
 
             self.write(")");
 
@@ -187,7 +177,10 @@ pub const Python_Generator = struct {
                 self.write(")");
             },
             .Optional => self.writeType(meta.Optional.child.*),
-            .Array => {}, // TODO @compileError("Handle goofy looking C Arrays in the calling function"),
+            .Array => |a| {
+                self.writeType(a.child.*);
+                self.print(" * {}", .{a.len});
+            },
             else => self.write(@tagName(meta)), // TODO!!!!!
         }
     }
@@ -226,7 +219,7 @@ pub const Python_Generator = struct {
         self.write(&[1]u8{char});
     }
 
-    fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
+    fn print(self: *Self, comptime fmt: []const u8, args: var) void {
         self.file.writer().print(fmt, args) catch unreachable;
     }
 
