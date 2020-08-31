@@ -9,14 +9,13 @@ export fn break_point(v: [*]u8) callconv(.Naked) void {
     @breakpoint();
 }
 
+const WackType = packed struct {
+    mr_field: *LameType,
+};
+
 const LameType = extern struct {
     blah: WackType,
 };
-
-const WackType = packed struct {
-    mr_field: u8,
-};
-
 const WhatsAUnion = extern union {
     a: *LameType,
     b: u64,

@@ -421,7 +421,7 @@ pub const TypeInfo = union(enum) {
     }
 
     pub fn copy(comptime T: type, allocator: *Allocator, comptime src: var) T {
-        return TypeInfo.copy2(T, allocator, src, 1);
+        return TypeInfo.copy2(T, allocator, src, 5);
     }
 
     pub fn copy2(comptime T: type, allocator: *Allocator, comptime src: var, comptime depth: u32) T {

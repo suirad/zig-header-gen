@@ -1,4 +1,5 @@
 const std = @import("std");
+const StringHashMap = std.StringHashMap;
 const Allocator = std.mem.Allocator;
 const FnMeta = std.builtin.TypeInfo.Fn;
 const FnDecl = std.builtin.TypeInfo.Declaration.Data.FnDecl;
@@ -32,9 +33,9 @@ fn isSymbolDependency(comptime symbol_type: type) bool {
     };
 }
 
-fn getTypeName (comptime T: type) []const u8 {
+fn getTypeName(comptime T: type) []const u8 {
     comptime const type_info = @typeInfo(T);
-                    
+
     return switch (type_info) {
         .Pointer => |p| getTypeName(p.child),
         .Array => |p| getTypeName(p.child),
@@ -42,11 +43,16 @@ fn getTypeName (comptime T: type) []const u8 {
     };
 }
 
+pub const SymbolPhase = enum {
+    Signature, Body, Full
+};
+
 pub fn Ordered_Generator(comptime Generator: type) type {
     return struct {
         inner_gen: Generator,
         allocator: *Allocator,
         symbols: DepsGraph(SymbolDeclaration),
+        emitted_phase: StringHashMap(SymbolPhase),
 
         const Self = @This();
 
@@ -57,6 +63,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
                 .inner_gen = Generator.init(src_file, dst_dir),
                 .allocator = allocator,
                 .symbols = DepsGraph(SymbolDeclaration).init(allocator),
+                .emitted_phase = StringHashMap(SymbolPhase).init(allocator),
             };
         }
 
@@ -72,15 +79,39 @@ pub fn Ordered_Generator(comptime Generator: type) type {
             // }
 
             // self.symbols.deinit();
+
+            self.emitted_phase.deinit();
+        }
+
+        fn getNextPhaseFor(self: *Self, symbol_name: []const u8, partial: bool) !?SymbolPhase {
+            var result = try self.emitted_phase.getOrPut(symbol_name);
+            
+            if (!result.found_existing) {
+                result.kv.value = if (partial) .Signature else .Full;
+
+                return result.kv.value;
+            } else if (result.kv.value == .Signature) {
+                if (partial) {
+                    return null;
+                } else {
+                    result.kv.value = .Full;
+
+                    return .Body;
+                }
+            }
+
+            return null;
         }
 
         fn flush(self: *Self) void {
             while (self.symbols.readEmitted()) |emitted| {
+                var phase = self.getNextPhaseFor(emitted.symbol.name, emitted.partial) catch unreachable orelse continue ;
+                
                 // Handle emitted.partial
                 switch (emitted.symbol.payload) {
-                    .Struct => |meta| self.inner_gen.gen_struct(emitted.symbol.name, meta),
-                    .Union => |meta| self.inner_gen.gen_union(emitted.symbol.name, meta),
-                    .Enum => |meta| self.inner_gen.gen_enum(emitted.symbol.name, meta),
+                    .Struct => |meta| self.inner_gen.gen_struct(emitted.symbol.name, meta, phase),
+                    .Union => |meta| self.inner_gen.gen_union(emitted.symbol.name, meta, phase),
+                    .Enum => |meta| self.inner_gen.gen_enum(emitted.symbol.name, meta, phase),
                 }
             }
         }
