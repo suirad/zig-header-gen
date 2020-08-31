@@ -67,7 +67,7 @@ pub const Python_Generator = struct {
         self.write("\n\n");
     }
 
-    pub fn _gen_fields(self: *Self, name: []const u8, fields: var, phase: SymbolPhase) void {
+    pub fn _gen_fields(self: *Self, name: []const u8, fields: anytype, phase: SymbolPhase) void {
         comptime const prefix = "\t            ";
 
         if (phase == .Body) {
@@ -226,7 +226,7 @@ pub const Python_Generator = struct {
         self.write(&[1]u8{char});
     }
 
-    fn print(self: *Self, comptime fmt: []const u8, args: var) void {
+    fn print(self: *Self, comptime fmt: []const u8, args: anytype) void {
         self.file.writer().print(fmt, args) catch unreachable;
     }
 
