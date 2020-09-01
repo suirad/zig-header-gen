@@ -43,7 +43,7 @@ pub const C_Generator = struct {
         self.file.close();
     }
 
-    pub fn gen_func(self: *Self, comptime name: []const u8, comptime func: FnDecl, comptime meta: FnMeta) void {
+    pub fn gen_func(self: *Self, comptime name: []const u8, comptime meta: FnMeta) void {
         switch (meta.calling_convention) {
             .Naked => self.write("__attribute__((naked)) "),
             .Stdcall => self.write("__attribute__((stdcall)) "),
@@ -52,7 +52,7 @@ pub const C_Generator = struct {
             else => {},
         }
 
-        self.writeType(func.return_type);
+        self.writeType(meta.return_type.?);
         self.write(" " ++ name ++ "(");
 
         inline for (meta.args) |arg, i| {
