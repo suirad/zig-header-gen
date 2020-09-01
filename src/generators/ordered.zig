@@ -118,7 +118,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
 
         pub fn gen_func(self: *Self, comptime name: []const u8, comptime meta: FnMeta) void {
             comptime const decl: SymbolDeclaration = SymbolDeclaration{
-                .Fn = rt.TypeInfo.Fn.init(meta, rt.dd),
+                .Fn = rt.TypeInfo.Fn.init(meta),
             };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
@@ -139,7 +139,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
 
         pub fn gen_struct(self: *Self, comptime name: []const u8, comptime meta: StructMeta) void {
             comptime const decl: SymbolDeclaration = SymbolDeclaration{
-                .Struct = rt.TypeInfo.Struct.init(meta, name, rt.dd),
+                .Struct = rt.TypeInfo.Struct.init(meta, name),
             };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
@@ -155,7 +155,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
 
         pub fn gen_enum(self: *Self, comptime name: []const u8, comptime meta: EnumMeta) void {
             comptime const decl: SymbolDeclaration = SymbolDeclaration{
-                .Enum = rt.TypeInfo.Enum.init(meta, name, rt.dd),
+                .Enum = rt.TypeInfo.Enum.init(meta, name),
             };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
@@ -167,7 +167,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
 
         pub fn gen_union(self: *Self, comptime name: []const u8, comptime meta: UnionMeta) void {
             comptime const decl: SymbolDeclaration = SymbolDeclaration{
-                .Union = rt.TypeInfo.Union.init(meta, name, rt.dd),
+                .Union = rt.TypeInfo.Union.init(meta, name),
             };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
