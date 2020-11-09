@@ -85,14 +85,14 @@ pub fn Ordered_Generator(comptime Generator: type) type {
             var result = try self.emitted_phase.getOrPut(symbol_name);
 
             if (!result.found_existing) {
-                result.kv.value = if (partial) .Signature else .Full;
+                result.entry.value = if (partial) .Signature else .Full;
 
-                return result.kv.value;
-            } else if (result.kv.value == .Signature) {
+                return result.entry.value;
+            } else if (result.entry.value == .Signature) {
                 if (partial) {
                     return null;
                 } else {
-                    result.kv.value = .Full;
+                    result.entry.value = .Full;
 
                     return .Body;
                 }

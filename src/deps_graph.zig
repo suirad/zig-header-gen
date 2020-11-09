@@ -28,7 +28,7 @@ pub fn DepsGraph(comptime T: type) type {
                 .symbols = StringHashMap(*Symbol).init(allocator),
                 .dependants_of = StringHashMap(ArrayList(*Symbol)).init(allocator),
                 .current_symbol = null,
-                .emitted = TailQueue(EmittedSymbol).init(),
+                .emitted = TailQueue(EmittedSymbol){},
             };
         }
 
@@ -54,7 +54,7 @@ pub fn DepsGraph(comptime T: type) type {
             self.dependants_of.deinit();
 
             while (self.emitted.popFirst()) |node| {
-                self.emitted.destroyNode(node, self.allocator);
+                self.allocator.destroy(node);
             }
 
             self.current_symbol = null;
@@ -64,7 +64,7 @@ pub fn DepsGraph(comptime T: type) type {
             // A symbol_name can be blocking if either:
             //  1. There is no symbol declared with that name yet
             //  2. There is a symbol, but it is blocked by some dependencies too
-            const symbol = self.symbols.getValue(symbol_name) orelse return true;
+            const symbol = self.symbols.get(symbol_name) orelse return true;
 
             // TODO Should a symbol be able to depend on itself?
             // If so, what to do in that case? For now, it blocks itself
@@ -86,11 +86,11 @@ pub fn DepsGraph(comptime T: type) type {
             // inconsistent (with a KV whose value is empty)
             errdefer self.symbols.removeAssertDiscard(name);
 
-            result.kv.value = try self.allocator.create(Symbol);
+            result.entry.value = try self.allocator.create(Symbol);
 
-            result.kv.value.* = Symbol.init(self.allocator, name, payload);
+            result.entry.value.* = Symbol.init(self.allocator, name, payload);
 
-            self.current_symbol = result.kv.value;
+            self.current_symbol = result.entry.value;
         }
 
         pub const AddDependencyError = error{ NoSymbol, OutOfMemory };
@@ -113,19 +113,19 @@ pub fn DepsGraph(comptime T: type) type {
             // Creates or retrieves the array list that contains what symbols
             // depend on dependency_name. Also checks if this symbol is already there
             if (result.found_existing) {
-                for (result.kv.value.items) |symbol| {
+                for (result.entry.value.items) |symbol| {
                     if (symbol == current_symbol) {
                         already_added = true;
                     }
                 }
             } else {
-                result.kv.value = ArrayList(*Symbol).init(self.allocator);
+                result.entry.value = ArrayList(*Symbol).init(self.allocator);
             }
 
             if (!already_added) {
-                try result.kv.value.append(current_symbol);
+                try result.entry.value.append(current_symbol);
 
-                if (self.dependants_of.get(current_symbol.name)) |dependants| {
+                if (self.dependants_of.getEntry(current_symbol.name)) |dependants| {
                     for (dependants.value.items) |dep| {
                         if (std.mem.eql(u8, dep.name, dependency_name)) {
                             try dep.addDependency(.{ .Circular = current_symbol.name });
@@ -147,13 +147,19 @@ pub fn DepsGraph(comptime T: type) type {
 
         pub const EndSymbolError = error{OutOfMemory};
 
+        pub fn createNode(comptime V: type, data: V, allocator: *Allocator) !*TailQueue(V).Node {
+            var node = try allocator.create(TailQueue(V).Node);
+            node.* = .{ .data = data };
+            return node;
+        }
+
         pub fn endSymbol(self: *Self) EndSymbolError!void {
             var current_symbol = self.current_symbol orelse return;
 
-            var unblock_queue = std.TailQueue(EmittedSymbol).init();
+            var unblock_queue = std.TailQueue(EmittedSymbol){};
 
             if (!self.isBlocking(current_symbol.name)) {
-                const node = try unblock_queue.createNode(.{
+                const node = try createNode(EmittedSymbol, .{
                     .symbol = current_symbol,
                     .partial = current_symbol.hasDependencies(),
                 }, self.allocator);
@@ -169,7 +175,7 @@ pub fn DepsGraph(comptime T: type) type {
 
                 const symbol = symbol_node.data.symbol;
 
-                if (self.dependants_of.get(symbol.name)) |kv| {
+                if (self.dependants_of.getEntry(symbol.name)) |kv| {
                     for (kv.value.items) |dependant| {
                         if (dependant.removeDependency(symbol.name)) |dep| {
                             const unblock_dep = (!dependant.emitted and !dependant.hasDependenciesOfType(.Linear)) or !dependant.hasDependencies();
@@ -178,7 +184,7 @@ pub fn DepsGraph(comptime T: type) type {
 
                             dependant.emitted = true;
 
-                            const node = try unblock_queue.createNode(.{
+                            const node = try createNode(EmittedSymbol, .{
                                 .symbol = dependant,
                                 .partial = dependant.hasDependencies(),
                             }, self.allocator);
@@ -197,7 +203,7 @@ pub fn DepsGraph(comptime T: type) type {
 
             var symbol = symbol_node.data;
 
-            self.emitted.destroyNode(symbol_node, self.allocator);
+            self.allocator.destroy(symbol_node);
 
             return symbol;
         }
@@ -457,8 +463,8 @@ test "Three tier circular dependencies" {
     expectSymbol(deps.readEmitted(), "WackType", false);
     expectSymbol(deps.readEmitted(), "WhatsAUnion", false);
     expectSymbol(deps.readEmitted(), "LameType", false);
-    
+
     expect(deps.readEmitted() == null);
-    
+
     deps.deinit();
 }

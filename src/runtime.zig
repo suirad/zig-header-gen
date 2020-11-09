@@ -29,7 +29,7 @@ pub const TypeInfo = union(enum) {
     Union: Union,
     Fn: Fn,
     BoundFn: Fn,
-    Opaque: void,
+    Opaque: void, // TODO Opaque
     Frame: Frame,
     AnyFrame: AnyFrame,
     Vector: Vector,
@@ -74,7 +74,7 @@ pub const TypeInfo = union(enum) {
         /// The type of the sentinel is the element type of the pointer, which is
         /// the value of the `child` field in this struct. However there is no way
         /// to refer to that type here, so we use `var`.
-        // sentinel: var,
+        // sentinel: anytype,
         /// This data structure is used by the Zig language code generation and
         /// therefore must be kept in sync with the compiler implementation.
         pub const Size = enum {
@@ -111,7 +111,7 @@ pub const TypeInfo = union(enum) {
         /// The type of the sentinel is the element type of the array, which is
         /// the value of the `child` field in this struct. However there is no way
         /// to refer to that type here, so we use `var`.
-        // sentinel: var,
+        // sentinel: anytype,
         pub fn init(comptime m: std.builtin.TypeInfo.Array) Array {
             return comptime .{
                 .len = m.len,
@@ -139,12 +139,16 @@ pub const TypeInfo = union(enum) {
     pub const StructField = struct {
         name: []const u8,
         field_type: *const TypeInfo,
-        // default_value: var,
+        // default_value: anytype,
+        is_comptime: bool,
+        alignment: i32,
 
         pub fn init(comptime f: std.builtin.TypeInfo.StructField) StructField {
             return comptime .{
                 .name = f.name,
                 .field_type = &TypeInfo.init(f.field_type),
+                .is_comptime = f.is_comptime,
+                .alignment = f.alignment,
             };
         }
 
@@ -160,10 +164,13 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Struct = struct {
+        // Additional Field
         name: ?[]const u8,
+
         layout: ContainerLayout,
         fields: []const StructField,
         decls: []const Declaration,
+        is_tuple: bool,
 
         pub fn init(comptime m: std.builtin.TypeInfo.Struct, comptime name: []const u8) Struct {
             return comptime .{
@@ -187,6 +194,7 @@ pub const TypeInfo = union(enum) {
 
                     break :decls &arr;
                 },
+                .is_tuple = m.is_tuple,
             };
         }
 
@@ -274,7 +282,9 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Enum = struct {
+        // Additional Field
         name: ?[]const u8,
+
         layout: ContainerLayout,
         tag_type: *const TypeInfo,
         fields: []const EnumField,
@@ -323,21 +333,17 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const UnionField = struct {
+        // Additional Field
         name: []const u8,
-        enum_field: ?EnumField,
+
         field_type: *const TypeInfo,
+        alignment: i32,
 
         pub fn init(comptime f: std.builtin.TypeInfo.UnionField) UnionField {
             return comptime .{
                 .name = f.name,
-                .enum_field = if (f.enum_field) |ef|
-                    .{
-                        .name = ef.name,
-                        .value = ef.value,
-                    }
-                else
-                    null,
                 .field_type = &TypeInfo.init(f.field_type),
+                .alignment = f.alignment,
             };
         }
 
@@ -357,7 +363,9 @@ pub const TypeInfo = union(enum) {
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Union = struct {
+        // Additional Field
         name: ?[]const u8,
+
         layout: ContainerLayout,
         tag_type: ?*const TypeInfo,
         fields: []const UnionField,
@@ -432,6 +440,7 @@ pub const TypeInfo = union(enum) {
     /// therefore must be kept in sync with the compiler implementation.
     pub const Fn = struct {
         calling_convention: CallingConvention,
+        alignment: i32,
         is_generic: bool,
         is_var_args: bool,
         return_type: ?*const TypeInfo,
@@ -440,6 +449,7 @@ pub const TypeInfo = union(enum) {
         pub fn init(comptime m: std.builtin.TypeInfo.Fn) Fn {
             return comptime .{
                 .calling_convention = @intToEnum(CallingConvention, @enumToInt(m.calling_convention)),
+                .alignment = m.alignment,
                 .is_generic = m.is_generic,
                 .is_var_args = m.is_var_args,
                 .return_type = if (m.return_type) |t| &TypeInfo.init(t) else null,
@@ -468,10 +478,28 @@ pub const TypeInfo = union(enum) {
         }
     };
 
+    pub const Opaque = struct {
+        decls: []const Declaration,
+
+        pub fn init(comptime m: std.builtin.TypeInfo.Opaque) Opaque {
+            return comptime .{
+                .decls = decls: {
+                    comptime var arr: [m.decls.len]Declaration = undefined;
+
+                    inline for (m.decls) |f, i| {
+                        arr[i] = Declaration.init(f);
+                    }
+
+                    break :decls &arr;
+                },
+            };
+        }
+    };
+
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
     pub const Frame = struct {
-        // function: var,
+        // function: anytype,
     };
 
     /// This data structure is used by the Zig language code generation and
@@ -614,8 +642,8 @@ pub const TypeInfo = union(enum) {
         };
     };
 
-    pub fn alloc (comptime T: type) *TypeInfoSingleton {
-        comptime var ptr = TypeInfoSingleton {};
+    pub fn alloc(comptime T: type) *TypeInfoSingleton {
+        comptime var ptr = TypeInfoSingleton{};
 
         return &ptr;
     }
