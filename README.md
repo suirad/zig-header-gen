@@ -6,7 +6,7 @@
 Here are the following supported language binding outputs:
 
 - [x] C Bindings
-- [ ] Python Bindings
+- [x] Python Bindings
 - [ ] Rust Bindings
 - [ ] Go Bindings
 - [ ] Nim Bindings
