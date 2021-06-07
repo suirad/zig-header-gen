@@ -36,10 +36,10 @@ pub fn DepsGraph(comptime T: type) type {
             var s_iter = self.symbols.iterator();
             while (s_iter.next()) |entry| {
                 // Here entry.value is a *Symbol, so we deinit the symbol
-                entry.value.deinit(self.allocator);
+                entry.value_ptr.*.deinit(self.allocator);
 
                 // And free the pointer
-                self.allocator.destroy(entry.value);
+                self.allocator.destroy(entry.value_ptr.*);
             }
 
             self.symbols.deinit();
@@ -48,7 +48,7 @@ pub fn DepsGraph(comptime T: type) type {
             while (d_iter.next()) |entry| {
                 // Here entry.value is an ArrayList(*Symbol), so we simply
                 // deinit the array list (since the pointers were freed already)
-                entry.value.deinit();
+                entry.value_ptr.*.deinit();
             }
 
             self.dependants_of.deinit();
@@ -76,7 +76,7 @@ pub fn DepsGraph(comptime T: type) type {
         pub const BeginSymbolError = error{ DuplicateSymbol, OutOfMemory };
 
         pub fn beginSymbol(self: *Self, name: []const u8, payload: T) BeginSymbolError!void {
-            const result = try self.symbols.getOrPut(name);
+            var result = try self.symbols.getOrPut(name);
 
             if (result.found_existing) {
                 return error.DuplicateSymbol;
@@ -84,13 +84,13 @@ pub fn DepsGraph(comptime T: type) type {
 
             // Since the allocation can fail, we do not want to leave the state
             // inconsistent (with a KV whose value is empty)
-            errdefer self.symbols.removeAssertDiscard(name);
+            errdefer std.debug.assert(self.symbols.remove(name));
 
-            result.entry.value = try self.allocator.create(Symbol);
+            result.value_ptr.* = try self.allocator.create(Symbol);
 
-            result.entry.value.* = Symbol.init(self.allocator, name, payload);
+            result.value_ptr.*.* = Symbol.init(self.allocator, name, payload);
 
-            self.current_symbol = result.entry.value;
+            self.current_symbol = result.value_ptr.*;
         }
 
         pub const AddDependencyError = error{ NoSymbol, OutOfMemory };
@@ -113,20 +113,20 @@ pub fn DepsGraph(comptime T: type) type {
             // Creates or retrieves the array list that contains what symbols
             // depend on dependency_name. Also checks if this symbol is already there
             if (result.found_existing) {
-                for (result.entry.value.items) |symbol| {
+                for (result.value_ptr.items) |symbol| {
                     if (symbol == current_symbol) {
                         already_added = true;
                     }
                 }
             } else {
-                result.entry.value = ArrayList(*Symbol).init(self.allocator);
+                result.value_ptr.* = ArrayList(*Symbol).init(self.allocator);
             }
 
             if (!already_added) {
-                try result.entry.value.append(current_symbol);
+                try result.value_ptr.append(current_symbol);
 
                 if (self.dependants_of.getEntry(current_symbol.name)) |dependants| {
-                    for (dependants.value.items) |dep| {
+                    for (dependants.value_ptr.items) |dep| {
                         if (std.mem.eql(u8, dep.name, dependency_name)) {
                             try dep.addDependency(.{ .Circular = current_symbol.name });
 
@@ -176,7 +176,7 @@ pub fn DepsGraph(comptime T: type) type {
                 const symbol = symbol_node.data.symbol;
 
                 if (self.dependants_of.getEntry(symbol.name)) |kv| {
-                    for (kv.value.items) |dependant| {
+                    for (kv.value_ptr.items) |dependant| {
                         if (dependant.removeDependency(symbol.name)) |dep| {
                             const unblock_dep = (!dependant.emitted and !dependant.hasDependenciesOfType(.Linear)) or !dependant.hasDependencies();
 
@@ -306,7 +306,7 @@ pub fn DepsGraph(comptime T: type) type {
                 return self.dependencies.items.len > 0;
             }
 
-            pub fn hasDependenciesOfType(self: *Symbol, tag: @TagType(Dependency)) bool {
+            pub fn hasDependenciesOfType(self: *Symbol, tag: std.meta.TagType(Dependency)) bool {
                 for (self.dependencies.items) |dep| {
                     if (dep == tag) return true;
                 }
@@ -328,8 +328,8 @@ pub fn DepsGraph(comptime T: type) type {
 
             pub fn next(self: *BlockedSymbolsIterator) ?*Symbol {
                 while (self.hash_iter.next()) |symbol| {
-                    if (symbol.value.hasDependenciesOfType(.Linear)) {
-                        return symbol.value;
+                    if (symbol.value_ptr.*.hasDependenciesOfType(.Linear)) {
+                        return symbol.value_ptr.*;
                     }
                 }
 
@@ -343,10 +343,10 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 const expectEqualStrings = std.testing.expectEqualStrings;
 
-fn expectSymbol(emitted: ?DepsGraph(void).EmittedSymbol, expected_name: []const u8, expected_partial: bool) void {
-    expect(emitted != null);
-    expectEqualStrings(expected_name, emitted.?.symbol.name);
-    expectEqual(expected_partial, emitted.?.partial);
+fn expectSymbol(emitted: ?DepsGraph(void).EmittedSymbol, expected_name: []const u8, expected_partial: bool) !void {
+    try expect(emitted != null);
+    try expectEqualStrings(expected_name, emitted.?.symbol.name);
+    try expectEqual(expected_partial, emitted.?.partial);
 }
 
 test "Simple dependency graph with circular dependencies" {
@@ -357,42 +357,42 @@ test "Simple dependency graph with circular dependencies" {
     try deps.beginSymbol("SourceMap", {});
     try deps.addDependency("TextSpan");
     try deps.endSymbol();
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     try deps.beginSymbol("TextSpan", {});
     try deps.addDependency("TextPosition");
     try deps.endSymbol();
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     try deps.beginSymbol("TextPosition", {});
     try deps.addDependency("TextSpan");
     try deps.endSymbol();
 
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "TextPosition");
-        expectEqual(s.partial, true);
+        try expectEqualStrings(s.symbol.name, "TextPosition");
+        try expectEqual(s.partial, true);
     }
 
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "TextSpan");
-        expectEqual(s.partial, false);
+        try expectEqualStrings(s.symbol.name, "TextSpan");
+        try expectEqual(s.partial, false);
     }
 
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "SourceMap");
-        expectEqual(s.partial, false);
+        try expectEqualStrings(s.symbol.name, "SourceMap");
+        try expectEqual(s.partial, false);
     }
 
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "TextPosition");
-        expectEqual(s.partial, false);
+        try expectEqualStrings(s.symbol.name, "TextPosition");
+        try expectEqual(s.partial, false);
     }
 
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     deps.deinit();
 }
@@ -405,33 +405,33 @@ test "Blocked symbols iterator" {
     try deps.beginSymbol("SourceMap", {});
     try deps.addDependency("TextSpan");
     try deps.endSymbol();
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     try deps.beginSymbol("TextSpan", {});
     try deps.endSymbol();
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "TextSpan");
-        expectEqual(s.partial, false);
+        try expectEqualStrings(s.symbol.name, "TextSpan");
+        try expectEqual(s.partial, false);
     }
-    expect(deps.emitted.first != null);
+    try expect(deps.emitted.first != null);
     if (deps.readEmitted()) |s| {
-        expectEqualStrings(s.symbol.name, "SourceMap");
-        expectEqual(s.partial, false);
+        try expectEqualStrings(s.symbol.name, "SourceMap");
+        try expectEqual(s.partial, false);
     }
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     try deps.beginSymbol("TextPosition", {});
     try deps.addDependency("Cursor");
     try deps.endSymbol();
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     var iter = deps.blockedIterator();
     var symbol = iter.next();
 
-    expect(symbol != null);
-    expectEqualStrings(symbol.?.name, "TextPosition");
-    expect(iter.next() == null);
+    try expect(symbol != null);
+    try expectEqualStrings(symbol.?.name, "TextPosition");
+    try expect(iter.next() == null);
 
     deps.deinit();
 }
@@ -457,14 +457,14 @@ test "Three tier circular dependencies" {
     try deps.addDependency("LameType");
     try deps.endSymbol();
 
-    expectSymbol(deps.readEmitted(), "LookMaAnEnum", false);
-    expectSymbol(deps.readEmitted(), "WhatsAUnion", true);
-    expectSymbol(deps.readEmitted(), "LameType", true);
-    expectSymbol(deps.readEmitted(), "WackType", false);
-    expectSymbol(deps.readEmitted(), "WhatsAUnion", false);
-    expectSymbol(deps.readEmitted(), "LameType", false);
+    try expectSymbol(deps.readEmitted(), "LookMaAnEnum", false);
+    try expectSymbol(deps.readEmitted(), "WhatsAUnion", true);
+    try expectSymbol(deps.readEmitted(), "LameType", true);
+    try expectSymbol(deps.readEmitted(), "WackType", false);
+    try expectSymbol(deps.readEmitted(), "WhatsAUnion", false);
+    try expectSymbol(deps.readEmitted(), "LameType", false);
 
-    expect(deps.readEmitted() == null);
+    try expect(deps.readEmitted() == null);
 
     deps.deinit();
 }
