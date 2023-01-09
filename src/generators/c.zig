@@ -48,11 +48,11 @@ pub const C_Generator = struct {
         self.writeType(meta.return_type.?);
         self.write(" " ++ name ++ "(");
 
-        inline for (meta.args) |arg, i| {
-            self.writeType(arg.arg_type.?);
+        inline for (meta.params) |arg, i| {
+            self.writeType(arg.type.?);
             //TODO: Figure out how to get arg names; for now just do arg0..argN
             _ = self.file.writer().print(" arg{}", .{i}) catch unreachable;
-            if (i != meta.args.len - 1)
+            if (i != meta.params.len - 1)
                 self.write(", ");
         }
 

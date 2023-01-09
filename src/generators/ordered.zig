@@ -85,14 +85,14 @@ pub fn Ordered_Generator(comptime Generator: type) type {
             var result = try self.emitted_phase.getOrPut(symbol_name);
 
             if (!result.found_existing) {
-                result.entry.value = if (partial) .Signature else .Full;
+                result.value_ptr.* = if (partial) .Signature else .Full;
 
-                return result.entry.value;
-            } else if (result.entry.value == .Signature) {
+                return result.value_ptr.*;
+            } else if (result.value_ptr.* == .Signature) {
                 if (partial) {
                     return null;
                 } else {
-                    result.entry.value = .Full;
+                    result.value_ptr.* = .Full;
 
                     return .Body;
                 }
@@ -123,7 +123,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
             };
 
             self.symbols.beginSymbol(name, decl) catch |err| @panic(@errorName(err));
-            inline for (meta.args) |f| {
+            inline for (meta.params) |f| {
                 if (f.arg_type != null and comptime isSymbolDependency(f.arg_type.?)) {
                     self.symbols.addDependency(getTypeName(f.arg_type.?)) catch |err| @panic(@errorName(err));
                 }

@@ -43,23 +43,23 @@ pub const Python_Generator = struct {
     }
 
     pub fn gen_func(self: *Self, name: []const u8, meta: FnMeta) void {
-        self.print("lib.{}.argtypes = [", .{name});
+        self.print("lib.{s}.argtypes = [", .{name});
 
-        for (meta.args) |arg, i| {
-            if (arg.arg_type) |t| {
+        for (meta.params) |arg, i| {
+            if (arg.type) |t| {
                 self.writeType(t.*);
             } else {
                 self.write("None");
             }
 
-            if (i != meta.args.len - 1) {
+            if (i != meta.params.len - 1) {
                 self.write(", ");
             }
         }
 
         self.write("]\n");
 
-        self.print("lib.{}.restype = ", .{name});
+        self.print("lib.{s}.restype = ", .{name});
         if (meta.return_type) |return_type| {
             self.writeType(return_type.*);
         } else {
@@ -72,7 +72,7 @@ pub const Python_Generator = struct {
         const prefix = "\t            ";
 
         if (phase == .Body) {
-            self.print("{}._fields_ = [", .{name});
+            self.print("{s}._fields_ = [", .{name});
         } else {
             self.write("\t_fields_ = [");
         }
@@ -82,7 +82,7 @@ pub const Python_Generator = struct {
                 self.write(prefix);
             }
 
-            self.print("(\"{}\", ", .{field.name});
+            self.print("(\"{s}\", ", .{field.name});
 
             self.writeType(field.field_type.*);
 
@@ -98,7 +98,7 @@ pub const Python_Generator = struct {
 
     pub fn gen_struct(self: *Self, name: []const u8, meta: StructMeta, phase: SymbolPhase) void {
         if (phase != .Body) {
-            self.print("class {}(ctypes.Structure):\n", .{name});
+            self.print("class {s}(ctypes.Structure):\n", .{name});
 
             if (meta.layout == .Packed) {
                 self.write("\t_pack_ = 1\n");
@@ -116,7 +116,7 @@ pub const Python_Generator = struct {
 
     pub fn gen_enum(self: *Self, name: []const u8, meta: EnumMeta, phase: SymbolPhase) void {
         _ = phase;
-        self.print("class {}(enum.IntEnum):\n", .{name});
+        self.print("class {s}(enum.IntEnum):\n", .{name});
 
         for (meta.fields) |field| {
             self.write("\t");
@@ -133,7 +133,7 @@ pub const Python_Generator = struct {
 
     pub fn gen_union(self: *Self, name: []const u8, meta: UnionMeta, phase: SymbolPhase) void {
         if (phase != .Body) {
-            self.print("class {}(ctypes.Union):\n", .{name});
+            self.print("class {s}(ctypes.Union):\n", .{name});
         }
 
         if (phase != .Signature) {
@@ -152,7 +152,7 @@ pub const Python_Generator = struct {
             // .usize => self.writeCtype("c_usize"), // TODO
             // .isize => self.writeCtype("c_isize"), // TODO
             .Int => |i| {
-                switch (i.is_signed) {
+                switch (i.signedness == .signed) {
                     true => self.print("ctypes.c_int{}", .{i.bits}),
                     false => self.print("ctypes.c_uint{}", .{i.bits}),
                 }

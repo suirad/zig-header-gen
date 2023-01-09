@@ -74,6 +74,7 @@ pub const TypeInfo = union(enum) {
         is_const: bool,
         is_volatile: bool,
         alignment: i32,
+        address_space: std.builtin.AddressSpace,
         child: *const TypeInfo,
         is_allowzero: bool,
         /// This field is an optional type.
@@ -158,7 +159,8 @@ pub const TypeInfo = union(enum) {
     pub const StructField = struct {
         name: []const u8,
         field_type: *const TypeInfo,
-        // default_value: anytype,
+        type: ?*const TypeInfo,
+        default_value: ?*const anyopaque,
         is_comptime: bool,
         alignment: i32,
 
@@ -192,6 +194,7 @@ pub const TypeInfo = union(enum) {
         name: ?[]const u8,
 
         layout: ContainerLayout,
+        backing_integer: ?*const TypeInfo = null,
         fields: []const StructField,
         decls: []const Declaration,
         is_tuple: bool,
@@ -377,7 +380,7 @@ pub const TypeInfo = union(enum) {
     pub const UnionField = struct {
         // Additional Field
         name: []const u8,
-
+        type: ?*const TypeInfo,
         field_type: *const TypeInfo,
         alignment: i32,
 
@@ -462,20 +465,20 @@ pub const TypeInfo = union(enum) {
 
     /// This data structure is used by the Zig language code generation and
     /// therefore must be kept in sync with the compiler implementation.
-    pub const FnArg = struct {
+    pub const Param = struct {
         is_generic: bool,
         is_noalias: bool,
-        arg_type: ?*const TypeInfo,
+        type: ?*const TypeInfo,
 
-        pub fn init(comptime f: std.builtin.Type.FnArg) FnArg {
+        pub fn init(comptime f: std.builtin.Type.Param) Param {
             return comptime .{
                 .is_generic = f.is_generic,
                 .is_noalias = f.is_noalias,
-                .arg_type = if (f.arg_type) |t| &TypeInfo.init(t) else null,
+                .type = if (f.type) |t| &TypeInfo.init(t) else null,
             };
         }
 
-        pub fn deinit(self: *const FnArg, allocator: Allocator) void {
+        pub fn deinit(self: *const Param, allocator: Allocator) void {
             if (self.arg_type) |t| {
                 t.deinit(allocator);
 
@@ -484,7 +487,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(FnArg, std.builtin.Type.FnArg, .{});
+        validateSymbolInSync(Param, std.builtin.Type.Fn.Param, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -495,7 +498,7 @@ pub const TypeInfo = union(enum) {
         is_generic: bool,
         is_var_args: bool,
         return_type: ?*const TypeInfo,
-        args: []const FnArg,
+        params: []const Param,
 
         pub fn init(comptime m: std.builtin.Type.Fn) Fn {
             return comptime .{
@@ -505,10 +508,10 @@ pub const TypeInfo = union(enum) {
                 .is_var_args = m.is_var_args,
                 .return_type = if (m.return_type) |t| &TypeInfo.init(t) else null,
                 .args = args: {
-                    comptime var arr: [m.args.len]FnArg = undefined;
+                    comptime var arr: [m.args.len]Param = undefined;
 
                     inline for (m.args) |f, i| {
-                        arr[i] = FnArg.init(f);
+                        arr[i] = Param.init(f);
                     }
 
                     break :args &arr;
@@ -615,13 +618,13 @@ pub const TypeInfo = union(enum) {
     pub const Declaration = struct {
         name: []const u8,
         is_pub: bool,
-        data: Data,
+        // data: Data,
 
         pub fn init(comptime f: std.builtin.Type.Declaration) Declaration {
             return comptime .{
                 .name = f.name,
                 .is_pub = f.is_pub,
-                .data = Data.init(f.data),
+                // .data = Data.init(f.data),
             };
         }
 
@@ -629,82 +632,6 @@ pub const TypeInfo = union(enum) {
             self.data.deinit(allocator);
 
             allocator.free(self.name);
-        }
-
-        /// This data structure is used by the Zig language code generation and
-        /// therefore must be kept in sync with the compiler implementation.
-        pub const Data = union(enum) {
-            Type: *const TypeInfo,
-            Var: *const TypeInfo,
-            Fn: FnDecl,
-
-            pub fn init(comptime d: std.builtin.Type.Declaration.Data) Data {
-                return comptime switch (d) {
-                    .Type => |t| .{ .Type = &TypeInfo.init(t) },
-                    .Var => |t| .{
-                        .Var = &TypeInfo.init(t),
-                    },
-                    .Fn => |t| .{ .Fn = FnDecl.init(t) },
-                };
-            }
-
-            /// This data structure is used by the Zig language code generation and
-            /// therefore must be kept in sync with the compiler implementation.
-            pub const FnDecl = struct {
-                fn_type: *const TypeInfo,
-                is_noinline: bool,
-                is_var_args: bool,
-                is_extern: bool,
-                is_export: bool,
-                lib_name: ?[]const u8,
-                return_type: *const TypeInfo,
-                arg_names: []const []const u8,
-
-                pub fn init(comptime t: std.builtin.Type.Declaration.Data.FnDecl) FnDecl {
-                    return comptime .{
-                        .fn_type = &TypeInfo.init(t.fn_type),
-                        .is_noinline = t.is_noinline,
-                        .is_var_args = t.is_var_args,
-                        .is_extern = t.is_extern,
-                        .is_export = t.is_export,
-                        .lib_name = t.lib_name,
-                        .return_type = &TypeInfo.init(t.return_type),
-                        .arg_names = t.arg_names,
-                    };
-                }
-
-                pub fn deinit(self: *const FnDecl, allocator: Allocator) void {
-                    self.fn_type.deinit(allocator);
-                    self.return_type.deinit(allocator);
-
-                    allocator.destroy(self.fn_type);
-                    allocator.destroy(self.return_type);
-
-                    for (self.arg_names) |a| allocator.free(a);
-                    allocator.free(self.arg_names);
-
-                    if (self.lib_name) |lib_name| {
-                        allocator.free(lib_name);
-                    }
-                }
-            };
-            comptime {
-                validateSymbolInSync(FnDecl, std.builtin.Type.Declaration.Data.FnDecl, .{});
-            }
-
-            pub fn deinit(self: *const Data, allocator: Allocator) void {
-                switch (self.*) {
-                    .Type, .Var => |t| {
-                        t.deinit(allocator);
-
-                        allocator.destroy(t);
-                    },
-                    .Fn => |f| f.deinit(allocator),
-                }
-            }
-        };
-        comptime {
-            validateSymbolInSync(Data, std.builtin.Type.Declaration.Data, .{});
         }
     };
     comptime {
