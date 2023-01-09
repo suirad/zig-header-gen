@@ -1,11 +1,11 @@
 const std = @import("std");
 const StringHashMap = std.StringHashMap;
 const Allocator = std.mem.Allocator;
-const FnMeta = std.builtin.TypeInfo.Fn;
-const FnDecl = std.builtin.TypeInfo.Declaration.Data.FnDecl;
-const StructMeta = std.builtin.TypeInfo.Struct;
-const EnumMeta = std.builtin.TypeInfo.Enum;
-const UnionMeta = std.builtin.TypeInfo.Union;
+const FnMeta = std.builtin.Type.Fn;
+const FnDecl = std.builtin.Type.Declaration.Data.FnDecl;
+const StructMeta = std.builtin.Type.Struct;
+const EnumMeta = std.builtin.Type.Enum;
+const UnionMeta = std.builtin.Type.Union;
 const Dir = std.fs.Dir;
 const DepsGraph = @import("../deps_graph.zig").DepsGraph;
 const rt = @import("../runtime.zig");
@@ -38,7 +38,7 @@ fn isSymbolDependency(comptime symbol_type: type) bool {
 }
 
 fn getTypeName(comptime T: type) []const u8 {
-    comptime const type_info = @typeInfo(T);
+    const type_info = @typeInfo(T);
 
     return switch (type_info) {
         .Pointer => |p| getTypeName(p.child),
@@ -104,6 +104,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         fn flush(self: *Self) void {
             while (self.symbols.readEmitted()) |emitted| {
                 const partial = if (emitted.symbol.payload == .Fn) false else emitted.partial;
+                _ = partial;
 
                 var phase = self.getNextPhaseFor(emitted.symbol.name, emitted.partial) catch unreachable orelse continue;
 
@@ -117,7 +118,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_func(self: *Self, comptime name: []const u8, comptime meta: FnMeta) void {
-            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+            const decl: SymbolDeclaration = SymbolDeclaration{
                 .Fn = rt.TypeInfo.Fn.init(meta),
             };
 
@@ -138,7 +139,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_struct(self: *Self, comptime name: []const u8, comptime meta: StructMeta) void {
-            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+            const decl: SymbolDeclaration = SymbolDeclaration{
                 .Struct = rt.TypeInfo.Struct.init(meta, name),
             };
 
@@ -154,7 +155,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_enum(self: *Self, comptime name: []const u8, comptime meta: EnumMeta) void {
-            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+            const decl: SymbolDeclaration = SymbolDeclaration{
                 .Enum = rt.TypeInfo.Enum.init(meta, name),
             };
 
@@ -166,7 +167,7 @@ pub fn Ordered_Generator(comptime Generator: type) type {
         }
 
         pub fn gen_union(self: *Self, comptime name: []const u8, comptime meta: UnionMeta) void {
-            comptime const decl: SymbolDeclaration = SymbolDeclaration{
+            const decl: SymbolDeclaration = SymbolDeclaration{
                 .Union = rt.TypeInfo.Union.init(meta, name),
             };
 

@@ -177,7 +177,7 @@ pub fn DepsGraph(comptime T: type) type {
 
                 if (self.dependants_of.getEntry(symbol.name)) |kv| {
                     for (kv.value_ptr.items) |dependant| {
-                        if (dependant.removeDependency(symbol.name)) |dep| {
+                        if (dependant.removeDependency(symbol.name)) |_| {
                             const unblock_dep = (!dependant.emitted and !dependant.hasDependenciesOfType(.Linear)) or !dependant.hasDependencies();
 
                             if (!unblock_dep) continue;
@@ -257,6 +257,7 @@ pub fn DepsGraph(comptime T: type) type {
             }
 
             pub fn deinit(self: *Symbol, allocator: *Allocator) void {
+                _ = allocator;
                 self.dependencies.deinit();
             }
 
@@ -273,6 +274,7 @@ pub fn DepsGraph(comptime T: type) type {
             }
 
             pub fn removeDependency(self: *Symbol, dependency_name: []const u8) ?Dependency {
+                _ = dependency_name;
                 var maybe_dep_index: ?usize = null;
 
                 for (self.dependencies.items) |dependency, i| {
@@ -293,6 +295,7 @@ pub fn DepsGraph(comptime T: type) type {
             }
 
             pub fn getDependency(self: *Symbol, dependency_name: []const u8) ?Dependency {
+                _ = dependency_name;
                 for (self.dependencies.items) |dependency| {
                     if (dependency.eqlName(dependency)) {
                         return dependency;

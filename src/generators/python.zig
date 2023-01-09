@@ -1,6 +1,6 @@
 const std = @import("std");
 const Dir = std.fs.Dir;
-const warn = std.debug.warn;
+const warn = std.debug.print;
 const rt = @import("../runtime.zig");
 const FnDecl = rt.TypeInfo.Declaration.Data.FnDecl;
 const FnMeta = rt.TypeInfo.Fn;
@@ -17,9 +17,9 @@ pub const Python_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        comptime const filebaseext = std.fs.path.basename(src_file);
+        const filebaseext = std.fs.path.basename(src_file);
         // The .len - 4 assumes a .zig extension
-        comptime const filebase = filebaseext[0 .. filebaseext.len - 4];
+        const filebase = filebaseext[0 .. filebaseext.len - 4];
 
         var file = dst_dir.createFile(filebase ++ ".py", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);
@@ -68,7 +68,7 @@ pub const Python_Generator = struct {
     }
 
     pub fn _gen_fields(self: *Self, name: []const u8, fields: anytype, phase: SymbolPhase) void {
-        comptime const prefix = "\t            ";
+        const prefix = "\t            ";
 
         if (phase == .Body) {
             self.print("{}._fields_ = [", .{name});
@@ -114,9 +114,10 @@ pub const Python_Generator = struct {
     }
 
     pub fn gen_enum(self: *Self, name: []const u8, meta: EnumMeta, phase: SymbolPhase) void {
+        _ = phase;
         self.print("class {}(enum.IntEnum):\n", .{name});
 
-        for (meta.fields) |field, i| {
+        for (meta.fields) |field| {
             self.write("\t");
             self.writeScreamingSnakeCase(field.name);
             self.print(" = {}\n", .{field.value});

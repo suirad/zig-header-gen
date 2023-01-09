@@ -1,8 +1,8 @@
 const std = @import("std");
 const builtin = std.builtin;
-const TypeInfo = builtin.TypeInfo;
+const TypeInfo = builtin.Type;
 const Declaration = TypeInfo.Declaration;
-const warn = std.debug.warn;
+const warn = std.debug.print;
 
 // Provided generators
 pub const C_Generator = @import("generators/c.zig").C_Generator;
@@ -18,7 +18,6 @@ const GeneratorInterface = struct {
     fn gen_union() void {}
 };
 
-
 fn includeSymbol(comptime decl: Declaration) bool {
     if (decl.data == .Type) {
         const T = decl.data.Type;
@@ -28,7 +27,7 @@ fn includeSymbol(comptime decl: Declaration) bool {
             .Struct => |s| s.layout == .Extern or s.layout == .Packed,
             .Union => |u| u.layout == .Extern,
             .Enum => |e| e.layout == .Extern,
-            else => false
+            else => false,
         };
     }
 

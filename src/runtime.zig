@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-pub const TypeId = @TagType(TypeInfo);
+pub const TypeId = std.builtin.TypeId(TypeInfo);
 
 const TypeInfoSingleton = struct {
     resolved: bool = false,
@@ -41,7 +41,7 @@ pub const TypeInfo = union(enum) {
         signedness: Signedness,
         bits: i32,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Int) Int {
+        pub fn init(comptime m: std.builtin.Type.Int) Int {
             return comptime .{
                 .signedness = @intToEnum(Signedness, @enumToInt(m.signedness)),
                 .bits = m.bits,
@@ -49,7 +49,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Int, std.builtin.TypeInfo.Int, .{});
+        validateSymbolInSync(Int, std.builtin.Type.Int, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -57,14 +57,14 @@ pub const TypeInfo = union(enum) {
     pub const Float = struct {
         bits: i32,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Float) Float {
+        pub fn init(comptime m: std.builtin.Type.Float) Float {
             return comptime .{
                 .bits = m.bits,
             };
         }
     };
     comptime {
-        validateSymbolInSync(Float, std.builtin.TypeInfo.Float, .{});
+        validateSymbolInSync(Float, std.builtin.Type.Float, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -90,7 +90,7 @@ pub const TypeInfo = union(enum) {
             C,
         };
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Pointer) Pointer {
+        pub fn init(comptime m: std.builtin.Type.Pointer) Pointer {
             return comptime .{
                 .size = @intToEnum(TypeInfo.Pointer.Size, @enumToInt(m.size)),
                 .is_const = m.is_const,
@@ -108,7 +108,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Pointer, std.builtin.TypeInfo.Pointer, .{
+        validateSymbolInSync(Pointer, std.builtin.Type.Pointer, .{
             .ignore_fields = .{"sentinel"},
         });
     }
@@ -123,7 +123,7 @@ pub const TypeInfo = union(enum) {
         /// the value of the `child` field in this struct. However there is no way
         /// to refer to that type here, so we use `var`.
         // sentinel: anytype,
-        pub fn init(comptime m: std.builtin.TypeInfo.Array) Array {
+        pub fn init(comptime m: std.builtin.Type.Array) Array {
             return comptime .{
                 .len = m.len,
                 .child = &TypeInfo.init(m.child),
@@ -137,7 +137,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Array, std.builtin.TypeInfo.Array, .{
+        validateSymbolInSync(Array, std.builtin.Type.Array, .{
             .ignore_fields = .{"sentinel"},
         });
     }
@@ -150,7 +150,7 @@ pub const TypeInfo = union(enum) {
         Packed,
     };
     comptime {
-        validateSymbolInSync(ContainerLayout, std.builtin.TypeInfo.ContainerLayout, .{});
+        validateSymbolInSync(ContainerLayout, std.builtin.Type.ContainerLayout, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -162,7 +162,7 @@ pub const TypeInfo = union(enum) {
         is_comptime: bool,
         alignment: i32,
 
-        pub fn init(comptime f: std.builtin.TypeInfo.StructField) StructField {
+        pub fn init(comptime f: std.builtin.Type.StructField) StructField {
             return comptime .{
                 .name = f.name,
                 .field_type = &TypeInfo.init(f.field_type),
@@ -180,7 +180,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(StructField, std.builtin.TypeInfo.StructField, .{
+        validateSymbolInSync(StructField, std.builtin.Type.StructField, .{
             .ignore_fields = .{"default_value"},
         });
     }
@@ -196,7 +196,7 @@ pub const TypeInfo = union(enum) {
         decls: []const Declaration,
         is_tuple: bool,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Struct, comptime name: []const u8) Struct {
+        pub fn init(comptime m: std.builtin.Type.Struct, comptime name: []const u8) Struct {
             return comptime .{
                 .name = name,
                 .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
@@ -222,7 +222,7 @@ pub const TypeInfo = union(enum) {
             };
         }
         comptime {
-            validateSymbolInSync(Struct, std.builtin.TypeInfo.Struct, .{});
+            validateSymbolInSync(Struct, std.builtin.Type.Struct, .{});
         }
 
         pub fn deinit(self: *const Struct, allocator: *Allocator) void {
@@ -239,7 +239,7 @@ pub const TypeInfo = union(enum) {
     pub const Optional = struct {
         child: *const TypeInfo,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Optional) Optional {
+        pub fn init(comptime m: std.builtin.Type.Optional) Optional {
             return comptime .{
                 .child = &TypeInfo.init(m.child),
             };
@@ -252,7 +252,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Optional, std.builtin.TypeInfo.Optional, .{});
+        validateSymbolInSync(Optional, std.builtin.Type.Optional, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -261,7 +261,7 @@ pub const TypeInfo = union(enum) {
         error_set: *const TypeInfo,
         payload: *const TypeInfo,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.ErrorUnion) ErrorUnion {
+        pub fn init(comptime m: std.builtin.Type.ErrorUnion) ErrorUnion {
             return comptime .{
                 .error_set = &TypeInfo.init(m.error_set),
                 .payload = &TypeInfo.init(m.payload),
@@ -277,7 +277,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(ErrorUnion, std.builtin.TypeInfo.ErrorUnion, .{});
+        validateSymbolInSync(ErrorUnion, std.builtin.Type.ErrorUnion, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -290,7 +290,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Error, std.builtin.TypeInfo.Error, .{});
+        validateSymbolInSync(Error, std.builtin.Type.Error, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -303,7 +303,7 @@ pub const TypeInfo = union(enum) {
         name: []const u8,
         value: i32,
 
-        pub fn init(comptime f: std.builtin.TypeInfo.EnumField) EnumField {
+        pub fn init(comptime f: std.builtin.Type.EnumField) EnumField {
             return comptime .{
                 .name = f.name,
                 .value = f.value,
@@ -315,7 +315,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(EnumField, std.builtin.TypeInfo.EnumField, .{});
+        validateSymbolInSync(EnumField, std.builtin.Type.EnumField, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -330,7 +330,7 @@ pub const TypeInfo = union(enum) {
         decls: []const Declaration,
         is_exhaustive: bool,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Enum, comptime name: []const u8) Enum {
+        pub fn init(comptime m: std.builtin.Type.Enum, comptime name: []const u8) Enum {
             return comptime .{
                 .name = name,
                 .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
@@ -369,7 +369,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Enum, std.builtin.TypeInfo.Enum, .{});
+        validateSymbolInSync(Enum, std.builtin.Type.Enum, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -381,7 +381,7 @@ pub const TypeInfo = union(enum) {
         field_type: *const TypeInfo,
         alignment: i32,
 
-        pub fn init(comptime f: std.builtin.TypeInfo.UnionField) UnionField {
+        pub fn init(comptime f: std.builtin.Type.UnionField) UnionField {
             return comptime .{
                 .name = f.name,
                 .field_type = &TypeInfo.init(f.field_type),
@@ -402,7 +402,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(UnionField, std.builtin.TypeInfo.UnionField, .{});
+        validateSymbolInSync(UnionField, std.builtin.Type.UnionField, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -416,7 +416,7 @@ pub const TypeInfo = union(enum) {
         fields: []const UnionField,
         decls: []const Declaration,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Union, comptime name: []const u8) Union {
+        pub fn init(comptime m: std.builtin.Type.Union, comptime name: []const u8) Union {
             return comptime .{
                 .name = name,
                 .layout = @intToEnum(TypeInfo.ContainerLayout, @enumToInt(m.layout)),
@@ -457,7 +457,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Union, std.builtin.TypeInfo.Union, .{});
+        validateSymbolInSync(Union, std.builtin.Type.Union, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -467,7 +467,7 @@ pub const TypeInfo = union(enum) {
         is_noalias: bool,
         arg_type: ?*const TypeInfo,
 
-        pub fn init(comptime f: std.builtin.TypeInfo.FnArg) FnArg {
+        pub fn init(comptime f: std.builtin.Type.FnArg) FnArg {
             return comptime .{
                 .is_generic = f.is_generic,
                 .is_noalias = f.is_noalias,
@@ -484,7 +484,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(FnArg, std.builtin.TypeInfo.FnArg, .{});
+        validateSymbolInSync(FnArg, std.builtin.Type.FnArg, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -497,7 +497,7 @@ pub const TypeInfo = union(enum) {
         return_type: ?*const TypeInfo,
         args: []const FnArg,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Fn) Fn {
+        pub fn init(comptime m: std.builtin.Type.Fn) Fn {
             return comptime .{
                 .calling_convention = @intToEnum(CallingConvention, @enumToInt(m.calling_convention)),
                 .alignment = m.alignment,
@@ -529,13 +529,13 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Fn, std.builtin.TypeInfo.Fn, .{});
+        validateSymbolInSync(Fn, std.builtin.Type.Fn, .{});
     }
 
     pub const Opaque = struct {
         decls: []const Declaration,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Opaque) Opaque {
+        pub fn init(comptime m: std.builtin.Type.Opaque) Opaque {
             return comptime .{
                 .decls = decls: {
                     comptime var arr: [m.decls.len]Declaration = undefined;
@@ -550,7 +550,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Opaque, std.builtin.TypeInfo.Opaque, .{});
+        validateSymbolInSync(Opaque, std.builtin.Type.Opaque, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -559,7 +559,7 @@ pub const TypeInfo = union(enum) {
         // function: anytype,
     };
     comptime {
-        validateSymbolInSync(Frame, std.builtin.TypeInfo.Frame, .{
+        validateSymbolInSync(Frame, std.builtin.Type.Frame, .{
             .ignore_fields = .{"function"},
         });
     }
@@ -569,7 +569,7 @@ pub const TypeInfo = union(enum) {
     pub const AnyFrame = struct {
         child: ?*const TypeInfo,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.AnyFrame) AnyFrame {
+        pub fn init(comptime m: std.builtin.Type.AnyFrame) AnyFrame {
             return comptime .{
                 .child = if (m.child) |t| &TypeInfo.init(t) else null,
             };
@@ -584,7 +584,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(AnyFrame, std.builtin.TypeInfo.AnyFrame, .{});
+        validateSymbolInSync(AnyFrame, std.builtin.Type.AnyFrame, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -593,7 +593,7 @@ pub const TypeInfo = union(enum) {
         len: i32,
         child: *const TypeInfo,
 
-        pub fn init(comptime m: std.builtin.TypeInfo.Vector) Vector {
+        pub fn init(comptime m: std.builtin.Type.Vector) Vector {
             return comptime .{
                 .len = m.len,
                 .child = &TypeInfo.init(m.child),
@@ -607,7 +607,7 @@ pub const TypeInfo = union(enum) {
         }
     };
     comptime {
-        validateSymbolInSync(Vector, std.builtin.TypeInfo.Vector, .{});
+        validateSymbolInSync(Vector, std.builtin.Type.Vector, .{});
     }
 
     /// This data structure is used by the Zig language code generation and
@@ -617,7 +617,7 @@ pub const TypeInfo = union(enum) {
         is_pub: bool,
         data: Data,
 
-        pub fn init(comptime f: std.builtin.TypeInfo.Declaration) Declaration {
+        pub fn init(comptime f: std.builtin.Type.Declaration) Declaration {
             return comptime .{
                 .name = f.name,
                 .is_pub = f.is_pub,
@@ -638,7 +638,7 @@ pub const TypeInfo = union(enum) {
             Var: *const TypeInfo,
             Fn: FnDecl,
 
-            pub fn init(comptime d: std.builtin.TypeInfo.Declaration.Data) Data {
+            pub fn init(comptime d: std.builtin.Type.Declaration.Data) Data {
                 return comptime switch (d) {
                     .Type => |t| .{ .Type = &TypeInfo.init(t) },
                     .Var => |t| .{
@@ -660,7 +660,7 @@ pub const TypeInfo = union(enum) {
                 return_type: *const TypeInfo,
                 arg_names: []const []const u8,
 
-                pub fn init(comptime t: std.builtin.TypeInfo.Declaration.Data.FnDecl) FnDecl {
+                pub fn init(comptime t: std.builtin.Type.Declaration.Data.FnDecl) FnDecl {
                     return comptime .{
                         .fn_type = &TypeInfo.init(t.fn_type),
                         .is_noinline = t.is_noinline,
@@ -689,7 +689,7 @@ pub const TypeInfo = union(enum) {
                 }
             };
             comptime {
-                validateSymbolInSync(FnDecl, std.builtin.TypeInfo.Declaration.Data.FnDecl, .{});
+                validateSymbolInSync(FnDecl, std.builtin.Type.Declaration.Data.FnDecl, .{});
             }
 
             pub fn deinit(self: *const Data, allocator: *Allocator) void {
@@ -704,24 +704,25 @@ pub const TypeInfo = union(enum) {
             }
         };
         comptime {
-            validateSymbolInSync(Data, std.builtin.TypeInfo.Declaration.Data, .{});
+            validateSymbolInSync(Data, std.builtin.Type.Declaration.Data, .{});
         }
     };
     comptime {
-        validateSymbolInSync(Declaration, std.builtin.TypeInfo.Declaration, .{});
+        validateSymbolInSync(Declaration, std.builtin.Type.Declaration, .{});
     }
 
     // Validate the whole TypeInfo sync
     comptime {
         @setEvalBranchQuota(2000);
-        validateSymbolInSync(TypeInfo, std.builtin.TypeInfo, .{});
+        validateSymbolInSync(TypeInfo, std.builtin.Type, .{});
     }
 
-    usingnamespace comptime blk: {
+    usingnamespace blk: {
         var uniqueIdCounter: usize = 0;
 
         break :blk struct {
             pub fn uniqueId(comptime T: type) usize {
+                _ = T;
                 comptime {
                     var id = uniqueIdCounter;
 
@@ -734,6 +735,7 @@ pub const TypeInfo = union(enum) {
     };
 
     pub fn alloc(comptime T: type) *TypeInfoSingleton {
+        _ = T;
         comptime var ptr = TypeInfoSingleton{};
 
         return &ptr;
@@ -752,7 +754,7 @@ pub const TypeInfo = union(enum) {
 
         ptr.resolved = true;
 
-        comptime const info = @typeInfo(T);
+        const info = @typeInfo(T);
 
         ptr.info = comptime switch (info) {
             .Type => .{ .Type = {} },
@@ -856,7 +858,7 @@ pub fn hasField(comptime T: type, comptime field_name: []const u8) bool {
     return false;
 }
 
-/// Function to be run in compile time, responsible for verifying if the 
+/// Function to be run in compile time, responsible for verifying if the
 /// structures/enums/unions defined in this file to represent the TypeInfo at
 /// runtime in sync with the current Zig version's comptime structures/enums/unions
 pub fn validateSymbolInSync(comptime runtime_type: type, comptime builtin_type: type, comptime options: anytype) void {
@@ -1034,6 +1036,8 @@ test "Runtime TypeInfo.Struct declarations" {
         };
 
         pub fn thing(one: usize, two: *LameType, three: [*]u16) bool {
+            _ = three;
+            _ = two;
             return one == 1;
         }
     });

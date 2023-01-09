@@ -1,11 +1,11 @@
 const std = @import("std");
 const Dir = std.fs.Dir;
-const FnMeta = std.builtin.TypeInfo.Fn;
-const FnDecl = std.builtin.TypeInfo.Declaration.Data.FnDecl;
-const StructMeta = std.builtin.TypeInfo.Struct;
-const EnumMeta = std.builtin.TypeInfo.Enum;
-const UnionMeta = std.builtin.TypeInfo.Union;
-const warn = std.debug.warn;
+const FnMeta = std.builtin.Type.Fn;
+const FnDecl = std.builtin.Type.Declaration.Data.FnDecl;
+const StructMeta = std.builtin.Type.Struct;
+const EnumMeta = std.builtin.Type.Enum;
+const UnionMeta = std.builtin.Type.Union;
+const warn = std.debug.print;
 
 pub const C_Generator = struct {
     file: std.fs.File,
@@ -13,8 +13,8 @@ pub const C_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        comptime const filebaseext = std.fs.path.basename(src_file);
-        comptime const filebase = filebaseext[0 .. filebaseext.len - 4];
+        const filebaseext = std.fs.path.basename(src_file);
+        const filebase = filebaseext[0 .. filebaseext.len - 4];
 
         var file = dst_dir.createFile(filebase ++ ".h", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);

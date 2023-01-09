@@ -1,7 +1,7 @@
 const Builder = @import("std").build.Builder;
 
 const std = @import("std");
-const warn = std.debug.warn;
+const warn = std.debug.print;
 
 // This build.zig is only used as an example of using header_gen
 
