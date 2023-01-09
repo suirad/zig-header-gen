@@ -6,7 +6,7 @@ const TailQueue = std.TailQueue;
 
 pub fn DepsGraph(comptime T: type) type {
     return struct {
-        allocator: *Allocator,
+        allocator: Allocator,
         // All the pointers to symbols inside this struct are owned by this struct
         // More specifically, they sould be freed when removed from the symbols
         // hash map. And they should only be removed from there when there are
@@ -22,7 +22,7 @@ pub fn DepsGraph(comptime T: type) type {
 
         const Self = @This();
 
-        pub fn init(allocator: *Allocator) Self {
+        pub fn init(allocator: Allocator) Self {
             return .{
                 .allocator = allocator,
                 .symbols = StringHashMap(*Symbol).init(allocator),
@@ -147,7 +147,7 @@ pub fn DepsGraph(comptime T: type) type {
 
         pub const EndSymbolError = error{OutOfMemory};
 
-        pub fn createNode(comptime V: type, data: V, allocator: *Allocator) !*TailQueue(V).Node {
+        pub fn createNode(comptime V: type, data: V, allocator: Allocator) !*TailQueue(V).Node {
             var node = try allocator.create(TailQueue(V).Node);
             node.* = .{ .data = data };
             return node;
@@ -248,7 +248,7 @@ pub fn DepsGraph(comptime T: type) type {
             emitted: bool = false,
             payload: T,
 
-            pub fn init(allocator: *Allocator, name: []const u8, payload: T) Symbol {
+            pub fn init(allocator: Allocator, name: []const u8, payload: T) Symbol {
                 return .{
                     .name = name,
                     .dependencies = ArrayList(Dependency).init(allocator),
@@ -256,7 +256,7 @@ pub fn DepsGraph(comptime T: type) type {
                 };
             }
 
-            pub fn deinit(self: *Symbol, allocator: *Allocator) void {
+            pub fn deinit(self: *Symbol, allocator: Allocator) void {
                 _ = allocator;
                 self.dependencies.deinit();
             }

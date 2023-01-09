@@ -13,19 +13,22 @@ pub const C_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        const filebaseext = std.fs.path.basename(src_file);
-        const filebase = filebaseext[0 .. filebaseext.len - 4];
 
-        var file = dst_dir.createFile(filebase ++ ".h", .{}) catch
+        var file = dst_dir.createFile(comptime filebase(src_file) ++ ".h", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);
 
         var res = Self{ .file = file };
 
         // write the header's header, lol
-        res.write("#ifndef _" ++ filebase ++ "_H\n\n#define _" ++ filebase ++ "_H\n");
+        res.write("#ifndef _" ++ comptime filebase(src_file) ++ "_H\n\n#define _" ++ filebase(src_file) ++ "_H\n");
         res.write("#include <stddef.h>\n#include <stdint.h>\n#include <stdbool.h>\n\n");
 
         return res;
+    }
+
+    fn filebase(src_file: []const u8) []const u8 {
+        const filebaseext = std.fs.path.basename(src_file);
+        return filebaseext[0 .. filebaseext.len - 4];
     }
 
     pub fn deinit(self: *Self) void {

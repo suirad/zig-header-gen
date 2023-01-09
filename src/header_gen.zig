@@ -80,8 +80,8 @@ pub fn HeaderGen(comptime S: type, comptime libname: []const u8) type {
             // iterate exported enums
             // do this first in case target lang needs enums defined before use
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
-                    const T = decl.data.Type;
+                if (@typeInfo(S) == .Type) {
+                    const T = S;
                     const info = @typeInfo(T);
                     if (info == .Enum) {
                         const layout = info.Enum.layout;
@@ -94,8 +94,8 @@ pub fn HeaderGen(comptime S: type, comptime libname: []const u8) type {
 
             // iterate exported structs
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
-                    const T = decl.data.Type;
+                if (@typeInfo(S) == .Type) {
+                    const T = S;
                     const info = @typeInfo(T);
                     if (info == .Struct) {
                         const layout = info.Struct.layout;
@@ -107,7 +107,7 @@ pub fn HeaderGen(comptime S: type, comptime libname: []const u8) type {
             }
 
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
+                if (@typeInfo(S) == .Type) {
                     const T = decl.data.Type;
                     const info = @typeInfo(T);
                     if (info == .Union) {
@@ -121,15 +121,15 @@ pub fn HeaderGen(comptime S: type, comptime libname: []const u8) type {
 
             // iterate exported fns
             inline for (self.decls) |decl| {
-                if (decl.data == .Fn) {
+                if (@typeInfo(S) == .Fn) {
                     const func = decl.data.Fn;
                     if (func.is_export) {
                         //TODO: Look into parsing file for argument names
                         const fn_meta = @typeInfo(func.fn_type).Fn;
                         gen.gen_func(decl.name, fn_meta);
                     }
-                } else if (decl.data == .Var) {
-                    const fn_meta = @typeInfo(decl.data.Var);
+                } else if (@typeInfo(S) == .Type) {
+                    const fn_meta = @typeInfo(decl.data.Type);
 
                     if (fn_meta == .Fn) {
                         gen.gen_func(decl.name, fn_meta.Fn);

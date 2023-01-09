@@ -17,11 +17,7 @@ pub const Python_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        const filebaseext = std.fs.path.basename(src_file);
-        // The .len - 4 assumes a .zig extension
-        const filebase = filebaseext[0 .. filebaseext.len - 4];
-
-        var file = dst_dir.createFile(filebase ++ ".py", .{}) catch
+        var file = dst_dir.createFile(comptime filebase(src_file) ++ ".py", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);
 
         var res = Self{ .file = file };
@@ -32,9 +28,14 @@ pub const Python_Generator = struct {
             \\
         );
 
-        res.write("lib = ctypes.cdll.LoadLibrary(\"" ++ filebase ++ ".dll\")\n\n");
+        res.write("lib = ctypes.cdll.LoadLibrary(\"" ++ comptime filebase(src_file) ++ ".dll\")\n\n");
 
         return res;
+    }
+
+    fn filebase(src_file: []const u8) []const u8 {
+        const filebaseext = std.fs.path.basename(src_file);
+        return filebaseext[0 .. filebaseext.len - 4];
     }
 
     pub fn deinit(self: *Self) void {

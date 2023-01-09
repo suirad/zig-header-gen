@@ -101,7 +101,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Pointer, allocator: *Allocator) void {
+        pub fn deinit(self: *const Pointer, allocator: Allocator) void {
             self.child.deinit(allocator);
 
             allocator.destroy(self.child);
@@ -130,7 +130,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Array, allocator: *Allocator) void {
+        pub fn deinit(self: *const Array, allocator: Allocator) void {
             self.child.deinit(allocator);
 
             allocator.destroy(self.child);
@@ -171,7 +171,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const StructField, allocator: *Allocator) void {
+        pub fn deinit(self: *const StructField, allocator: Allocator) void {
             allocator.free(self.name);
 
             self.field_type.deinit(allocator);
@@ -225,7 +225,7 @@ pub const TypeInfo = union(enum) {
             validateSymbolInSync(Struct, std.builtin.Type.Struct, .{});
         }
 
-        pub fn deinit(self: *const Struct, allocator: *Allocator) void {
+        pub fn deinit(self: *const Struct, allocator: Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
             for (self.decls) |f| f.deinit(allocator);
 
@@ -245,7 +245,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Optional, allocator: *Allocator) void {
+        pub fn deinit(self: *const Optional, allocator: Allocator) void {
             self.child.deinit(allocator);
 
             allocator.destroy(self.child);
@@ -268,7 +268,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const ErrorUnion, allocator: *Allocator) void {
+        pub fn deinit(self: *const ErrorUnion, allocator: Allocator) void {
             self.error_set.deinit(allocator);
             allocator.destroy(self.error_set);
 
@@ -285,7 +285,7 @@ pub const TypeInfo = union(enum) {
     pub const Error = struct {
         name: []const u8,
 
-        pub fn deinit(self: *const Error, allocator: *Allocator) void {
+        pub fn deinit(self: *const Error, allocator: Allocator) void {
             allocator.free(self.name);
         }
     };
@@ -310,7 +310,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const EnumField, allocator: *Allocator) void {
+        pub fn deinit(self: *const EnumField, allocator: Allocator) void {
             allocator.free(self.name);
         }
     };
@@ -357,7 +357,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Enum, allocator: *Allocator) void {
+        pub fn deinit(self: *const Enum, allocator: Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
             for (self.decls) |f| f.deinit(allocator);
 
@@ -389,7 +389,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const UnionField, allocator: *Allocator) void {
+        pub fn deinit(self: *const UnionField, allocator: Allocator) void {
             allocator.free(self.name);
 
             self.field_type.deinit(allocator);
@@ -442,7 +442,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Union, allocator: *Allocator) void {
+        pub fn deinit(self: *const Union, allocator: Allocator) void {
             for (self.fields) |f| f.deinit(allocator);
             for (self.decls) |f| f.deinit(allocator);
 
@@ -475,7 +475,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const FnArg, allocator: *Allocator) void {
+        pub fn deinit(self: *const FnArg, allocator: Allocator) void {
             if (self.arg_type) |t| {
                 t.deinit(allocator);
 
@@ -516,7 +516,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Fn, allocator: *Allocator) void {
+        pub fn deinit(self: *const Fn, allocator: Allocator) void {
             if (self.return_type) |r| {
                 r.deinit(allocator);
 
@@ -575,7 +575,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const AnyFrame, allocator: *Allocator) void {
+        pub fn deinit(self: *const AnyFrame, allocator: Allocator) void {
             if (self.child) |child| {
                 child.deinit(allocator);
 
@@ -600,7 +600,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Vector, allocator: *Allocator) void {
+        pub fn deinit(self: *const Vector, allocator: Allocator) void {
             self.child.deinit(allocator);
 
             allocator.destroy(self.child);
@@ -625,7 +625,7 @@ pub const TypeInfo = union(enum) {
             };
         }
 
-        pub fn deinit(self: *const Declaration, allocator: *Allocator) void {
+        pub fn deinit(self: *const Declaration, allocator: Allocator) void {
             self.data.deinit(allocator);
 
             allocator.free(self.name);
@@ -673,7 +673,7 @@ pub const TypeInfo = union(enum) {
                     };
                 }
 
-                pub fn deinit(self: *const FnDecl, allocator: *Allocator) void {
+                pub fn deinit(self: *const FnDecl, allocator: Allocator) void {
                     self.fn_type.deinit(allocator);
                     self.return_type.deinit(allocator);
 
@@ -692,7 +692,7 @@ pub const TypeInfo = union(enum) {
                 validateSymbolInSync(FnDecl, std.builtin.Type.Declaration.Data.FnDecl, .{});
             }
 
-            pub fn deinit(self: *const Data, allocator: *Allocator) void {
+            pub fn deinit(self: *const Data, allocator: Allocator) void {
                 switch (self.*) {
                     .Type, .Var => |t| {
                         t.deinit(allocator);
@@ -801,7 +801,7 @@ pub const TypeInfo = union(enum) {
         return &ptr.info;
     }
 
-    pub fn deinit(self: *TypeInfo, allocator: *Allocator) void {
+    pub fn deinit(self: *TypeInfo, allocator: Allocator) void {
         switch (self.*) {
             .Array => |a| a.deinit(allocator),
             .Pointer => |p| p.deinit(allocator),

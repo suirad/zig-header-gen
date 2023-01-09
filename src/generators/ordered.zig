@@ -16,7 +16,7 @@ const SymbolDeclaration = union(enum) {
     Enum: rt.TypeInfo.Enum,
     Fn: rt.TypeInfo.Fn,
 
-    pub fn deinit(self: SymbolDeclaration, allocator: *Allocator) void {
+    pub fn deinit(self: SymbolDeclaration, allocator: Allocator) void {
         switch (self) {
             .Struct => |s| s.deinit(allocator),
             .Union => |u| u.deinit(allocator),
@@ -54,7 +54,7 @@ pub const SymbolPhase = enum {
 pub fn Ordered_Generator(comptime Generator: type) type {
     return struct {
         inner_gen: Generator,
-        allocator: *Allocator,
+        allocator: Allocator,
         symbols: DepsGraph(SymbolDeclaration),
         emitted_phase: StringHashMap(SymbolPhase),
 
