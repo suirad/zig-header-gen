@@ -1,11 +1,13 @@
 const std = @import("std");
 const builtin = std.builtin;
-const TypeInfo = builtin.TypeInfo;
+const TypeInfo = builtin.Type;
 const Declaration = TypeInfo.Declaration;
-const warn = std.debug.warn;
+const warn = std.debug.print;
 
 // Provided generators
 pub const C_Generator = @import("generators/c.zig").C_Generator;
+pub const Python_Generator = @import("generators/python.zig").Python_Generator;
+pub const Ordered_Generator = @import("generators/ordered.zig").Ordered_Generator;
 
 const GeneratorInterface = struct {
     fn init() void {}
@@ -15,6 +17,22 @@ const GeneratorInterface = struct {
     fn gen_enum() void {}
     fn gen_union() void {}
 };
+
+fn includeSymbol(comptime decl: Declaration) bool {
+    if (decl.data == .Type) {
+        const T = decl.data.Type;
+        const info = @typeInfo(T);
+
+        return switch (info) {
+            .Struct => |s| s.layout == .Extern or s.layout == .Packed,
+            .Union => |u| u.layout == .Extern,
+            .Enum => |e| e.layout == .Extern,
+            else => false,
+        };
+    }
+
+    return false;
+}
 
 fn validateGenerator(comptime Generator: type) void {
     comptime {
@@ -31,15 +49,12 @@ fn validateGenerator(comptime Generator: type) void {
     }
 }
 
-pub fn HeaderGen(comptime fname: []const u8) type {
-    comptime var all_decls: []const Declaration = undefined;
-    comptime {
-        const import = @typeInfo(@import(fname));
-        all_decls = import.Struct.decls;
-    }
+pub fn HeaderGen(comptime S: type, comptime libname: []const u8) type {
+    comptime var all_decls: []const Declaration = @typeInfo(S).Struct.decls;
+
     return struct {
         decls: @TypeOf(all_decls) = all_decls,
-        source_file: []const u8 = fname,
+        source_file: []const u8 = libname ++ ".zig",
 
         const Self = @This();
 
@@ -65,8 +80,8 @@ pub fn HeaderGen(comptime fname: []const u8) type {
             // iterate exported enums
             // do this first in case target lang needs enums defined before use
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
-                    const T = decl.data.Type;
+                if (@typeInfo(S) == .Type) {
+                    const T = S;
                     const info = @typeInfo(T);
                     if (info == .Enum) {
                         const layout = info.Enum.layout;
@@ -79,8 +94,8 @@ pub fn HeaderGen(comptime fname: []const u8) type {
 
             // iterate exported structs
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
-                    const T = decl.data.Type;
+                if (@typeInfo(S) == .Type) {
+                    const T = S;
                     const info = @typeInfo(T);
                     if (info == .Struct) {
                         const layout = info.Struct.layout;
@@ -92,7 +107,7 @@ pub fn HeaderGen(comptime fname: []const u8) type {
             }
 
             inline for (self.decls) |decl| {
-                if (decl.data == .Type) {
+                if (@typeInfo(S) == .Type) {
                     const T = decl.data.Type;
                     const info = @typeInfo(T);
                     if (info == .Union) {
@@ -106,12 +121,18 @@ pub fn HeaderGen(comptime fname: []const u8) type {
 
             // iterate exported fns
             inline for (self.decls) |decl| {
-                if (decl.data == .Fn) {
+                if (@typeInfo(S) == .Fn) {
                     const func = decl.data.Fn;
                     if (func.is_export) {
                         //TODO: Look into parsing file for argument names
                         const fn_meta = @typeInfo(func.fn_type).Fn;
-                        gen.gen_func(decl.name, func, fn_meta);
+                        gen.gen_func(decl.name, fn_meta);
+                    }
+                } else if (@typeInfo(S) == .Type) {
+                    const fn_meta = @typeInfo(decl.data.Type);
+
+                    if (fn_meta == .Fn) {
+                        gen.gen_func(decl.name, fn_meta.Fn);
                     }
                 }
             }

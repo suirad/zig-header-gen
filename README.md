@@ -6,7 +6,7 @@
 Here are the following supported language binding outputs:
 
 - [x] C Bindings
-- [ ] Python Bindings
+- [x] Python Bindings
 - [ ] Rust Bindings
 - [ ] Go Bindings
 - [ ] Nim Bindings
@@ -28,7 +28,7 @@ const std = @import("std");
 export fn print_msg(msg_ptr: ?[*]const u8, len: usize) bool {
     if (msg_ptr) |raw_msg| {
         const msg = raw_msg[0 .. len - 1];
-        std.debug.warn("Msg is: {}", .{msg});
+        std.debug.print("Msg is: {}", .{msg});
         return true;
     }
     return false;

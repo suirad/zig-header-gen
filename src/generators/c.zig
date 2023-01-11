@@ -1,11 +1,11 @@
 const std = @import("std");
 const Dir = std.fs.Dir;
-const FnMeta = std.builtin.TypeInfo.Fn;
-const FnDecl = std.builtin.TypeInfo.Declaration.Data.FnDecl;
-const StructMeta = std.builtin.TypeInfo.Struct;
-const EnumMeta = std.builtin.TypeInfo.Enum;
-const UnionMeta = std.builtin.TypeInfo.Union;
-const warn = std.debug.warn;
+const FnMeta = std.builtin.Type.Fn;
+const FnDecl = std.builtin.Type.Declaration.Data.FnDecl;
+const StructMeta = std.builtin.Type.Struct;
+const EnumMeta = std.builtin.Type.Enum;
+const UnionMeta = std.builtin.Type.Union;
+const warn = std.debug.print;
 
 pub const C_Generator = struct {
     file: std.fs.File,
@@ -13,19 +13,22 @@ pub const C_Generator = struct {
     const Self = @This();
 
     pub fn init(comptime src_file: []const u8, dst_dir: *Dir) Self {
-        comptime const filebaseext = std.fs.path.basename(src_file);
-        comptime const filebase = filebaseext[0 .. filebaseext.len - 4];
 
-        var file = dst_dir.createFile(filebase ++ ".h", .{}) catch
+        var file = dst_dir.createFile(comptime filebase(src_file) ++ ".h", .{}) catch
             @panic("Failed to create header file for source: " ++ src_file);
 
         var res = Self{ .file = file };
 
         // write the header's header, lol
-        res.write("#ifndef _" ++ filebase ++ "_H\n\n#define _" ++ filebase ++ "_H\n");
+        res.write("#ifndef _" ++ comptime filebase(src_file) ++ "_H\n\n#define _" ++ filebase(src_file) ++ "_H\n");
         res.write("#include <stddef.h>\n#include <stdint.h>\n#include <stdbool.h>\n\n");
 
         return res;
+    }
+
+    fn filebase(src_file: []const u8) []const u8 {
+        const filebaseext = std.fs.path.basename(src_file);
+        return filebaseext[0 .. filebaseext.len - 4];
     }
 
     pub fn deinit(self: *Self) void {
@@ -33,7 +36,7 @@ pub const C_Generator = struct {
         self.file.close();
     }
 
-    pub fn gen_func(self: *Self, comptime name: []const u8, comptime func: FnDecl, comptime meta: FnMeta) void {
+    pub fn gen_func(self: *Self, comptime name: []const u8, comptime meta: FnMeta) void {
         switch (meta.calling_convention) {
             .Naked => self.write("__attribute__((naked)) "),
             .Stdcall => self.write("__attribute__((stdcall)) "),
@@ -42,14 +45,14 @@ pub const C_Generator = struct {
             else => {},
         }
 
-        self.writeType(func.return_type);
+        self.writeType(meta.return_type.?);
         self.write(" " ++ name ++ "(");
 
-        inline for (meta.args) |arg, i| {
-            self.writeType(arg.arg_type.?);
+        inline for (meta.params) |arg, i| {
+            self.writeType(arg.type.?);
             //TODO: Figure out how to get arg names; for now just do arg0..argN
             _ = self.file.writer().print(" arg{}", .{i}) catch unreachable;
-            if (i != meta.args.len - 1)
+            if (i != meta.params.len - 1)
                 self.write(", ");
         }
 
